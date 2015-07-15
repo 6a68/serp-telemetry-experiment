@@ -23,26 +23,36 @@ var request;
 // needed
 var isExiting = false;
 
-var serpCountQuery = 'SELECT COUNT(*) AS count FROM moz_historyvisits ' +
-                     'INNER JOIN moz_places ' +
-                     'ON moz_historyvisits.place_id = moz_places.id ' +
-                     'WHERE moz_places.url LIKE ":providerURL" ;';
+// see https://bugzil.la/1174937#c16 for explanation of query optimizations
+var query = "SELECT SUM(visit_count) AS count, url FROM moz_places " +
+                     "WHERE rev_host BETWEEN :reversed AND :reversed || X'FFFF' " +
+                     "AND url LIKE :fuzzy";
+
+var searchProviders = {
+  google: {
+    reversed: 'moc.elgoog.',
+    fuzzy: '%google.com/search?q%'
+  },
+  yahoo: {
+    reversed: 'moc.oohay.',
+    fuzzy: '%/search.yahoo.com/yhs/search?p%'
+  },
+  bing: {
+    reversed: 'moc.gnib.',
+    fuzzy: '%bing.com/search?q%'
+  },
+  amazon: {
+    reversed: 'moc.nozama.',
+    fuzzy: '%amazon.com/s?%' // XXX this is wrong. use the search service's url.
+  }
+};
+
 var counts = {
   google: null,
   yahoo: null,
   amazon: null,
   total: null
 };
-
-var getCount = function(url, db) {
-  if (isExiting) { return Promise.reject(new Error('aborting because isExiting is true')); }
-  var query = serpCountQuery.replace(':providerURL', url);
-  return db.execute(query);
-};
-var getGoogleCount = getCount.bind(null, '%google.com/search?q%');
-var getYahooCount = getCount.bind(null, '%/search.yahoo.com/yhs/search?p%');
-var getBingCount = getCount.bind(null, '%bing.com/search?q%');
-var getAmazonCount = getCount.bind(null, '%amazon.com/s?%');
 
 var saveCount = function(providerName, results) {
   var count = results && results[0] && results[0].getResultByName('count');
@@ -56,8 +66,8 @@ var saveCount = function(providerName, results) {
 
 var totalCount = function(db) {
   if (isExiting) { return Promise.reject(new Error('aborting because isExiting is true')); }
-  var query = 'SELECT COUNT(*) AS count FROM moz_historyvisits;';
-  return db.execute(query);
+  var totalQuery = 'SELECT COUNT(*) AS count FROM moz_historyvisits;';
+  return db.execute(totalQuery);
 };
 
 // TODO
@@ -79,21 +89,34 @@ var onError = function(step, err) {
 }
 
 var runExperiment = function() {
+  // TODO let's clean this up with Task before resubmitting
+  // TODO: why am I getting N different connections? is that just because
+  //       using promises makes it complicated to pass the connection around?
+  //       if so, why not just assign it to a global var?
+  // TODO: I'm kinda embarrassed about how I'm using this code. Seriously.
   return PlacesUtils.promiseDBConnection()
     // google bits
-    .then(getGoogleCount, onError.bind(null, 'getGoogleCount'))
+    .then(function(db) {
+      return db.execute(query, searchProviders['google']);
+    }, onError.bind(null, 'getGoogleCount'))
     .then(saveCount.bind(null, 'google'), onError.bind(null, 'saveCount::google'))
     // yahoo bits
     .then(PlacesUtils.promiseDBConnection, onError.bind(null, 'promiseDBConnection'))
-    .then(getYahooCount, onError.bind(null, 'getYahooCount'))
+    .then(function(db) {
+      return db.execute(query, searchProviders['yahoo']);
+    }, onError.bind(null, 'getYahooCount'))
     .then(saveCount.bind(null, 'yahoo'), onError.bind(null, 'saveCount::yahoo'))
     // bing bits
     .then(PlacesUtils.promiseDBConnection, onError.bind(null, 'promiseDBConnection'))
-    .then(getBingCount, onError.bind(null, 'getBingCount'))
+    .then(function(db) {
+      return db.execute(query, searchProviders['yahoo']);
+    }, onError.bind(null, 'getBingCount'))
     .then(saveCount.bind(null, 'bing'), onError.bind(null, 'saveCount::bing'))
     // amzn bits
     .then(PlacesUtils.promiseDBConnection, onError.bind(null, 'promiseDBConnection'))
-    .then(getAmazonCount, onError.bind(null, 'getAmazonCount'))
+    .then(function(db) {
+      return db.execute(query, searchProviders['amazon']);
+    }, onError.bind(null, 'getAmazonCount'))
     .then(saveCount.bind(null, 'amazon'), onError.bind(null, 'saveCount::amazon'))
     // total
     .then(PlacesUtils.promiseDBConnection, onError.bind(null, 'promiseDBConnection'))
