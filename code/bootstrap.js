@@ -35,7 +35,7 @@ var searchProviders = {
   },
   yahoo: {
     reversed: 'moc.oohay.',
-    fuzzy: '%/search.yahoo.com/yhs/search?p%'
+    fuzzy: '%search.yahoo.com/yhs/search?p%'
   },
   bing: {
     reversed: 'moc.gnib.',
