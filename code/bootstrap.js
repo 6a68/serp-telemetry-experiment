@@ -68,7 +68,7 @@ var saveCount = function(providerName, results) {
   }
 };
 
-var totalCount = function(db) {
+var getTotalCount = function(db) {
   if (isExiting) { return Promise.reject(new Error('aborting because isExiting is true')); }
   var totalQuery = 'SELECT COUNT(*) AS count FROM moz_historyvisits;';
   return db.execute(totalQuery);
