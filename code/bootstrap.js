@@ -155,11 +155,15 @@ var exit = function() {
  */
 
 function startup() {
+  // trying to make this accessible for testing manually
+  window.runExperiment = runExperiment;
+  /*
   try {
     runExperiment();
   } catch(ex) {
     onError('startup', ex);
   }
+  */
 }
 function shutdown() {
   exit();
