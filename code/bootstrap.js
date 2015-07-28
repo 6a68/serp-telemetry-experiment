@@ -64,7 +64,8 @@ var counts = {
 };
 
 var saveCount = function(providerName, results) {
-  var count = results && results[0] && results[0].getResultByName('count');
+  // query returns undefined if there are no visits to the specified page; replace with 0
+  var count = results && results[0] && results[0].getResultByName('count') || 0;
   if (Number.isInteger(count)) {
     counts[providerName] = count;
     return Promise.resolve(count);
