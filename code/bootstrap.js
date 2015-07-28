@@ -10,7 +10,8 @@ XPCOMUtils.defineLazyModuleGetter(this, "PlacesUtils",
                                   "resource://gre/modules/PlacesUtils.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "Promise",
                                   "resource://gre/modules/Promise.jsm");
-
+XPCOMUtils.defineLazyModuleGetter(this, "Services",
+                                  "resource://gre/modules/Services.jsm");
 /*
  * experiment code
  */
@@ -28,8 +29,12 @@ var query = "SELECT SUM(visit_count) AS count, url FROM moz_places " +
                      "WHERE rev_host BETWEEN :reversed AND :reversed || X'FFFF' " +
                      "AND url LIKE :fuzzy";
 
-const countUrl = 'https://statsd-bridge.services.mozilla.com/count/test01.1174937.serpfraction.';
-const gaugeUrl = 'https://statsd-bridge.services.mozilla.com/gauge/test01.1174937.serpfraction.';
+// we need a window pointer to get access to navigator.sendBeacon, but we have
+// to wait until a DOMWindow is ready (see runExperiment below)
+var window;
+
+const countUrl = 'https://statsd-bridge.services.mozilla.com/count/test03.1174937.serpfraction.';
+const gaugeUrl = 'https://statsd-bridge.services.mozilla.com/gauge/test03.1174937.serpfraction.';
 
 var searchProviders = {
   google: {
@@ -88,14 +93,14 @@ var send = function(data) {
   ['google', 'yahoo', 'bing', 'amazon'].forEach(function(provider) {
     let pct = percentage(counts[provider], counts.total);
     if (pct !== null) {
-      navigator.sendBeacon(gaugeUrl + provider, pct);
+      window.navigator.sendBeacon(gaugeUrl + provider, pct);
       console.log(gaugeUrl + provider, pct);
     } else {
-      navigator.sendBeacon(countUrl + provider + '.error', 1);
+      window.navigator.sendBeacon(countUrl + provider + '.error', 1);
       console.log(countUrl + provider + '.error', 1);
     }
   });
-  navigator.sendBeacon(gaugeUrl + 'total', counts.total);
+  window.navigator.sendBeacon(gaugeUrl + 'total', counts.total);
   console.log(gaugeUrl + 'total', counts.total);
 }
 
@@ -104,11 +109,37 @@ var send = function(data) {
 // format) and uninstall the experiment.
 var onError = function(step, err) {
   console.log(countUrl + 'error.' + step, 1)
-  navigator.sendBeacon(countUrl + 'error.' + step, 1)
+  window.navigator.sendBeacon(countUrl + 'error.' + step, 1)
   uninstall();
 }
 
+// annoying, but unavoidable, window management code
+// implements nsIWindowMediatorListener
+// pulled from MDN: https://developer.mozilla.org/en-US/docs/Mozilla/Tech/XPCOM/Reference/Interface/nsIWindowMediator#addListener()
+var windowListener = {
+  onOpenWindow: function(aWindow) {
+    Services.wm.removeListener(windowListener);
+    let domWindow = aWindow.QueryInterface(Ci.nsIInterfaceRequestor).
+                            getInterface(Ci.nsIDOMWindowInternal || Ci.nsIDOMWindow);
+    var onDomWindowReady = function() {
+      domWindow.removeEventListener('load', onDomWindowReady);
+      // assign the addon-global window variable, so that
+      // "window.navigator.sendBeacon" will be defined
+      window = domWindow;
+      _runExperiment();
+    }
+    domWindow.addEventListener('load', onDomWindowReady);
+  },
+  onCloseWindow: function(aWindow) {},
+  onWindowTitleChange: function(aWindow, aTitle) {}
+};
+
 var runExperiment = function() {
+  // get a window, or wait till a window is opened, then continue.
+  Services.wm.addListener(windowListener);
+};
+
+var _runExperiment = function() {
   return PlacesUtils.promiseDBConnection()
     // google bits
     .then(function(db) {
@@ -155,15 +186,11 @@ var exit = function() {
  */
 
 function startup() {
-  // trying to make this accessible for testing manually
-  window.runExperiment = runExperiment;
-  /*
   try {
     runExperiment();
   } catch(ex) {
     onError('startup', ex);
   }
-  */
 }
 function shutdown() {
   exit();
