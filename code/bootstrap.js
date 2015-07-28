@@ -28,8 +28,9 @@ var query = "SELECT SUM(visit_count) AS count, url FROM moz_places " +
 // to wait until a DOMWindow is ready (see runExperiment below)
 var window;
 
-const countUrl = 'https://statsd-bridge.services.mozilla.com/count/test05.1174937.serpfraction.';
-const gaugeUrl = 'https://statsd-bridge.services.mozilla.com/gauge/test05.1174937.serpfraction.';
+// XXX update these URLs for beta vs release populations
+const countUrl = 'https://statsd-bridge.services.mozilla.com/count/beta39.1174937.serpfraction.';
+const gaugeUrl = 'https://statsd-bridge.services.mozilla.com/gauge/beta39.1174937.serpfraction.';
 
 var searchProviders = {
   google: {
