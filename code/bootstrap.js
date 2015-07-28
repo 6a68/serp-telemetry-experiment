@@ -28,6 +28,9 @@ var query = "SELECT SUM(visit_count) AS count, url FROM moz_places " +
                      "WHERE rev_host BETWEEN :reversed AND :reversed || X'FFFF' " +
                      "AND url LIKE :fuzzy";
 
+const countUrl = 'https://statsd-bridge.services.mozilla.com/count/1174937.serpfraction.';
+const gaugeUrl = 'https://statsd-bridge.services.mozilla.com/gauge/1174937.serpfraction.';
+
 var searchProviders = {
   google: {
     reversed: 'moc.elgoog.',
@@ -43,13 +46,14 @@ var searchProviders = {
   },
   amazon: {
     reversed: 'moc.nozama.',
-    fuzzy: '%amazon.com/s?%' // XXX this is wrong. use the search service's url.
+    fuzzy: '%amazon.com/s?%'
   }
 };
 
 var counts = {
   google: null,
   yahoo: null,
+  bing: null,
   amazon: null,
   total: null
 };
@@ -70,58 +74,65 @@ var totalCount = function(db) {
   return db.execute(totalQuery);
 };
 
-// TODO
+// returns a percentage as an integer, or null if either operand was invalid
+// division operator handles type coercion for us
+var percentage = function(a, b) {
+  var result = a/b;
+  return isFinite(result) ? Math.round(result * 100) : null;
+};
+
+// For each search provider, either send the result percentage for that provider,
+// or increment an error counter.
+// Also send down the total history size for that user.
 var send = function(data) {
-  // JSONify the data
-  // ship down via XHR POST (what endpoint?)
+  ['google', 'yahoo', 'bing', 'amazon'].forEach(function(provider) {
+    let pct = percentage(counts[provider], counts.total);
+    if (pct !== null) {
+      navigator.sendBeacon(gaugeUrl + provider, pct);
+    } else {
+      navigator.sendBeacon(countUrl + provider + '.error', 1);
+    }
+  });
+  navigator.sendBeacon(gaugeUrl + 'total', counts.total);
 }
 
-// on error, if we're not exiting, return the error message and the step
-// number that failed.
+// If an error occurs when querying or connecting to the DB, just give up:
+// fire a beacon with the name of the failed step (in dot-delimited statsd
+// format) and uninstall the experiment.
 var onError = function(step, err) {
-  if (!isExiting) {
-    try {
-      send({status: failure, step: step, error: err});
-    // if sending fails, there's nothing left to do but give up
-    } catch(e) {}
-  }
+  navigator.sendBeacon(countUrl + 'error.' + step, 1)
   uninstall();
 }
 
 var runExperiment = function() {
-  // TODO let's clean this up with Task before resubmitting
-  // TODO: why am I getting N different connections? is that just because
-  //       using promises makes it complicated to pass the connection around?
-  //       if so, why not just assign it to a global var?
-  // TODO: I'm kinda embarrassed about how I'm using this code. Seriously.
   return PlacesUtils.promiseDBConnection()
     // google bits
     .then(function(db) {
       return db.execute(query, searchProviders['google']);
     }, onError.bind(null, 'getGoogleCount'))
-    .then(saveCount.bind(null, 'google'), onError.bind(null, 'saveCount::google'))
+    .then(saveCount.bind(null, 'google'), onError.bind(null, 'saveCount.google'))
     // yahoo bits
-    .then(PlacesUtils.promiseDBConnection, onError.bind(null, 'promiseDBConnection'))
+    .then(PlacesUtils.promiseDBConnection, onError.bind(null, 'promiseDBConnection.yahoo'))
     .then(function(db) {
       return db.execute(query, searchProviders['yahoo']);
     }, onError.bind(null, 'getYahooCount'))
-    .then(saveCount.bind(null, 'yahoo'), onError.bind(null, 'saveCount::yahoo'))
+    .then(saveCount.bind(null, 'yahoo'), onError.bind(null, 'saveCount.yahoo'))
     // bing bits
-    .then(PlacesUtils.promiseDBConnection, onError.bind(null, 'promiseDBConnection'))
+    .then(PlacesUtils.promiseDBConnection, onError.bind(null, 'promiseDBConnection.bing'))
     .then(function(db) {
       return db.execute(query, searchProviders['yahoo']);
     }, onError.bind(null, 'getBingCount'))
-    .then(saveCount.bind(null, 'bing'), onError.bind(null, 'saveCount::bing'))
+    .then(saveCount.bind(null, 'bing'), onError.bind(null, 'saveCount.bing'))
     // amzn bits
-    .then(PlacesUtils.promiseDBConnection, onError.bind(null, 'promiseDBConnection'))
+    .then(PlacesUtils.promiseDBConnection, onError.bind(null, 'promiseDBConnection.amazon'))
     .then(function(db) {
       return db.execute(query, searchProviders['amazon']);
     }, onError.bind(null, 'getAmazonCount'))
-    .then(saveCount.bind(null, 'amazon'), onError.bind(null, 'saveCount::amazon'))
+    .then(saveCount.bind(null, 'amazon'), onError.bind(null, 'saveCount.amazon'))
     // total
-    .then(PlacesUtils.promiseDBConnection, onError.bind(null, 'promiseDBConnection'))
+    .then(PlacesUtils.promiseDBConnection, onError.bind(null, 'promiseDBConnection.total'))
     .then(getTotalCount, onError.bind(null, 'getTotalCount'))
-    .then(saveCount.bind(null, 'total'), onError.bind(null, 'saveCount::total'))
+    .then(saveCount.bind(null, 'total'), onError.bind(null, 'saveCount.total'))
     // xhr
     .then(send, onError.bind(null, 'send'))
     // when finished, uninstall yourself
@@ -143,7 +154,6 @@ function startup() {
   try {
     runExperiment();
   } catch(ex) {
-    // TODO: best way to report back on failure?
     onError('startup', ex);
   }
 }
