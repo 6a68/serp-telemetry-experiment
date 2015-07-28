@@ -28,8 +28,8 @@ var query = "SELECT SUM(visit_count) AS count, url FROM moz_places " +
                      "WHERE rev_host BETWEEN :reversed AND :reversed || X'FFFF' " +
                      "AND url LIKE :fuzzy";
 
-const countUrl = 'https://statsd-bridge.services.mozilla.com/count/1174937.serpfraction.';
-const gaugeUrl = 'https://statsd-bridge.services.mozilla.com/gauge/1174937.serpfraction.';
+const countUrl = 'https://statsd-bridge.services.mozilla.com/count/test01.1174937.serpfraction.';
+const gaugeUrl = 'https://statsd-bridge.services.mozilla.com/gauge/test01.1174937.serpfraction.';
 
 var searchProviders = {
   google: {
@@ -89,17 +89,21 @@ var send = function(data) {
     let pct = percentage(counts[provider], counts.total);
     if (pct !== null) {
       navigator.sendBeacon(gaugeUrl + provider, pct);
+      console.log(gaugeUrl + provider, pct);
     } else {
       navigator.sendBeacon(countUrl + provider + '.error', 1);
+      console.log(countUrl + provider + '.error', 1);
     }
   });
   navigator.sendBeacon(gaugeUrl + 'total', counts.total);
+  console.log(gaugeUrl + 'total', counts.total);
 }
 
 // If an error occurs when querying or connecting to the DB, just give up:
 // fire a beacon with the name of the failed step (in dot-delimited statsd
 // format) and uninstall the experiment.
 var onError = function(step, err) {
+  console.log(countUrl + 'error.' + step, 1)
   navigator.sendBeacon(countUrl + 'error.' + step, 1)
   uninstall();
 }
