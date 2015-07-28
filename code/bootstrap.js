@@ -102,6 +102,7 @@ var send = function(data) {
   });
   window.navigator.sendBeacon(gaugeUrl + 'total', counts.total);
   console.log(gaugeUrl + 'total', counts.total);
+  console.log(JSON.stringify(counts));
 }
 
 // If an error occurs when querying or connecting to the DB, just give up:
