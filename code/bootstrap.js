@@ -129,7 +129,7 @@ var windowListener = {
       // "window.navigator.sendBeacon" will be defined
       window = domWindow;
       _runExperiment();
-    }
+    };
     domWindow.addEventListener('load', onDomWindowReady);
   },
   onCloseWindow: function(aWindow) {},
@@ -138,7 +138,12 @@ var windowListener = {
 
 var runExperiment = function() {
   // get a window, or wait till a window is opened, then continue.
-  Services.wm.addListener(windowListener);
+  var win = Services.wm.getMostRecentWindow('navigator:browser');
+  if (win) {
+    windowListener.onOpenWindow(win);
+  } else {
+    Services.wm.addListener(windowListener);
+  }
 };
 
 var _runExperiment = function() {
