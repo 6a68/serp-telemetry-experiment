@@ -3,7 +3,7 @@
   <Description about="urn:mozilla:install-manifest">
     <em:id>serp-fraction-counts-beta39@experiments.mozilla.org</em:id>
     <em:version>1.0.0</em:version>
-    <em:type>128</em:type>
+    <em:type>2</em:type>
     <em:bootstrap>true</em:bootstrap>
     <em:unpack>false</em:unpack>
 
