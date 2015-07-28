@@ -16,12 +16,7 @@ XPCOMUtils.defineLazyModuleGetter(this, "Services",
  * experiment code
  */
 
-// XHR pointer. we'll abort this if we get uninstalled mid-flight.
-var request;
-
-// global boolean; we don't have a pointer to the DB connection to abort requests,
-// but we can check the value of isExiting between issuing requests, and bail if
-// needed
+// if true, abort any remaining DB requests or beacons
 var isExiting = false;
 
 // see https://bugzil.la/1174937#c16 for explanation of query optimizations
@@ -33,8 +28,8 @@ var query = "SELECT SUM(visit_count) AS count, url FROM moz_places " +
 // to wait until a DOMWindow is ready (see runExperiment below)
 var window;
 
-const countUrl = 'https://statsd-bridge.services.mozilla.com/count/test03.1174937.serpfraction.';
-const gaugeUrl = 'https://statsd-bridge.services.mozilla.com/gauge/test03.1174937.serpfraction.';
+const countUrl = 'https://statsd-bridge.services.mozilla.com/count/test05.1174937.serpfraction.';
+const gaugeUrl = 'https://statsd-bridge.services.mozilla.com/gauge/test05.1174937.serpfraction.';
 
 var searchProviders = {
   google: {
@@ -80,38 +75,44 @@ var getTotalCount = function(db) {
   return db.execute(totalQuery);
 };
 
-// returns a percentage as an integer, or null if either operand was invalid
+// returns an integer percentage or null if either operand was invalid
 // division operator handles type coercion for us
 var percentage = function(a, b) {
   var result = a/b;
   return isFinite(result) ? Math.round(result * 100) : null;
 };
 
-// For each search provider, either send the result percentage for that provider,
-// or increment an error counter.
-// Also send down the total history size for that user.
+var sendBeacon = function(url, data) {
+  if (isExiting) { return; }
+  try {
+    window.navigator.sendBeacon(url, data);
+  } catch (ex) {
+    // something's wrong, give up
+    uninstall();
+  }
+};
+
+// For each search provider, either send the result percentage for that
+// provider, or increment an error counter. Also send down the total history
+// size for that user, and increment the total count of responding clients.
 var send = function(data) {
   ['google', 'yahoo', 'bing', 'amazon'].forEach(function(provider) {
     let pct = percentage(counts[provider], counts.total);
     if (pct !== null) {
-      window.navigator.sendBeacon(gaugeUrl + provider, pct);
-      console.log(gaugeUrl + provider, pct);
+      sendBeacon(gaugeUrl + provider, pct);
     } else {
-      window.navigator.sendBeacon(countUrl + provider + '.error', 1);
-      console.log(countUrl + provider + '.error', 1);
+      sendBeacon(countUrl + provider + '.error', 1);
     }
   });
-  window.navigator.sendBeacon(gaugeUrl + 'total', counts.total);
-  console.log(gaugeUrl + 'total', counts.total);
-  console.log(JSON.stringify(counts));
+  sendBeacon(gaugeUrl + 'total', counts.total);
+  sendBeacon(countUrl + 'clients', 1);
 }
 
 // If an error occurs when querying or connecting to the DB, just give up:
 // fire a beacon with the name of the failed step (in dot-delimited statsd
 // format) and uninstall the experiment.
 var onError = function(step, err) {
-  console.log(countUrl + 'error.' + step, 1)
-  window.navigator.sendBeacon(countUrl + 'error.' + step, 1)
+  sendBeacon(countUrl + 'error.' + step, 1)
   uninstall();
 }
 
@@ -137,6 +138,7 @@ var windowListener = {
 };
 
 var runExperiment = function() {
+  if (isExiting) { return; }
   // get a window, or wait till a window is opened, then continue.
   var win = Services.wm.getMostRecentWindow('navigator:browser');
   if (win) {
@@ -147,6 +149,7 @@ var runExperiment = function() {
 };
 
 var _runExperiment = function() {
+  if (isExiting) { return; }
   return PlacesUtils.promiseDBConnection()
     // google bits
     .then(function(db) {
@@ -175,16 +178,14 @@ var _runExperiment = function() {
     .then(PlacesUtils.promiseDBConnection, onError.bind(null, 'promiseDBConnection.total'))
     .then(getTotalCount, onError.bind(null, 'getTotalCount'))
     .then(saveCount.bind(null, 'total'), onError.bind(null, 'saveCount.total'))
-    // xhr
+    // send results to server
     .then(send, onError.bind(null, 'send'))
     // when finished, uninstall yourself
     .then(uninstall, onError.bind(null, 'uninstall'));
 };
 
 var exit = function() {
-  // abort any in-flight XHR
-  request && request.abort();
-  // abort any future Places queries
+  // abort any future Places queries or beacons
   isExiting = true;
 };
 
