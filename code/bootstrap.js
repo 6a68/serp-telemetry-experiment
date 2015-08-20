@@ -10,6 +10,8 @@ XPCOMUtils.defineLazyModuleGetter(this, "PlacesUtils",
                                   "resource://gre/modules/PlacesUtils.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "Services",
                                   "resource://gre/modules/Services.jsm");
+XPCOMUtils.defineLazyModuleGetter(this, "RecentWindow",
+                                  "resource:///modules/RecentWindow.jsm");
 /*
  * experiment code
  */
@@ -135,7 +137,7 @@ function runExperiment() {
     return;
   }
   // get a window, or wait till a window is opened, then continue.
-  let win = Services.wm.getMostRecentWindow('navigator:browser');
+  let win = RecentWindow.getMostRecentBrowserWindow();
   if (win) {
     windowListener.onOpenWindow(win);
   } else {
