@@ -62,18 +62,19 @@ function saveCount(providerName, results) {
   counts[providerName] = count;
 }
 
-function getTotalCount(db) {
+let getTotalCount = Task.async(function* (db) {
   if (isExiting) {
-    return Promise.reject(new Error('aborting because isExiting is true'));
+    throw new Error('aborting because isExiting is true');
   }
-  const totalQuery = 'SELECT COUNT(*) AS count FROM moz_historyvisits;';
-  return db.execute(totalQuery);
-}
+  yield db.execute(`
+    SELECT COUNT(*) AS count FROM moz_historyvisits;
+  `);
+});
 
 // returns an integer percentage or null if either operand was invalid
 // division operator handles type coercion for us
 function percentage(a, b) {
-  const result = a/b;
+  const result = a / b;
   return isFinite(result) ? Math.round(result * 100) : null;
 }
 
