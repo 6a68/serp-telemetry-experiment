@@ -1,0 +1,197 @@
+(In reply to Marco Bonardo [::mak] (spotty available until 24 Aug) from comment #23)
+> Comment on attachment 8640179
+> Updated patch based on feedback
+> 
+> Review of attachment 8640179:
+> -----------------------------------------------------------------
+> 
+> Looks like you might have \r\n line endings instead of \n that is the
+> mozilla coding style, you should be able to setup your editor to stick to
+> unix line endings.
+
+I think this might have been caused by copy-pasting the patch, rather than
+actually uploading a file; my vim says that `fileformat=unix` for that file.
+
+I'll be sure to upload a diff instead of copy-pasting it this time.
+
+> 
+> Btw, the queries look good, let me give you some more hints:
+> 
+> ::: experiments/serp-fraction-counts/code/bootstrap.js
+> @@ +8,5 @@
+> > +Cu.import("resource://gre/modules/XPCOMUtils.jsm");
+> > +XPCOMUtils.defineLazyModuleGetter(this, "PlacesUtils",
+> > +                                  "resource://gre/modules/PlacesUtils.jsm");
+> > +XPCOMUtils.defineLazyModuleGetter(this, "Promise",
+> > +                                  "resource://gre/modules/Promise.jsm");
+> 
+> nit: you should likely use DOM promises instead of Promise.jsm, I will post
+> some suggestions below regarding that
+
+Awesome, Promise.jsm removed. I also updated MDN to suggest not using Promise.jsm
+for Gecko 29+.
+
+> 
+> @@ +16,5 @@
+> > + * experiment code
+> > + */
+> > +
+> > +// if true, abort any remaining DB requests or beacons
+> > +var isExiting = false;
+> 
+> nit: in new code we prefer to use "let" instead of var
+
+I've replaced var with let or const throughout.
+
+> 
+> @@ +21,5 @@
+> > +
+> > +// see https://bugzil.la/1174937#c16 for explanation of query optimizations
+> > +var query = "SELECT SUM(visit_count) AS count, url FROM moz_places " +
+> > +                     "WHERE rev_host BETWEEN :reversed AND :reversed || X'FFFF' " +
+> > +                     "AND url LIKE :fuzzy";
+> 
+> nit: Here you might use a template string to avoid the many apices and
+> concats (plus it allows you to use double apices in queries, when needed).
+> may also use const.
+> const COUNT_QUERY = `SELECT ...
+>                      ...
+>                      AND url LIKE :fuzzy`;
+
+I've switched to 'const' and a template string.
+
+> 
+> @@ +63,5 @@
+> > +  // query returns undefined if there are no visits to the specified page; replace with 0
+> > +  var count = results && results[0] && results[0].getResultByName('count') || 0;
+> > +  if (Number.isInteger(count)) {
+> > +    counts[providerName] = count;
+> > +    return Promise.resolve(count);
+> 
+> let saveCount = function(providerName, results) {
+>   return new Promise((resolve, reject) => {
+>     ...
+>     resolve(count);
+>     ...
+>     reject(...);
+>   });
+> }
+> 
+> Btw, I don't see why this must return a promise, it's synchronous, could
+> just return and throw normally.
+
+The only reason I was using a promise was to be able to chain promises
+down at the bottom. No longer needed, since we will just use a Task, so
+this function becomes very simple.
+
+> 
+> @@ +72,5 @@
+> > +
+> > +var getTotalCount = function(db) {
+> > +  if (isExiting) { return Promise.reject(new Error('aborting because isExiting is true')); }
+> > +  var totalQuery = 'SELECT COUNT(*) AS count FROM moz_historyvisits;';
+> > +  return db.execute(totalQuery);
+> 
+> let getTotalCount = Task.async(function* (db) {
+>   if (isExiting) {
+>     throw new Error...
+>   }
+>   yield db.execute(`
+>     SELECT count(*)...
+>   `);
+> });
+
+Thanks very much for spelling this out. I've replaced my version with yours.
+
+> 
+> @@ +83,5 @@
+> > +  return isFinite(result) ? Math.round(result * 100) : null;
+> > +};
+> > +
+> > +var sendBeacon = function(url, data) {
+> > +  if (isExiting) { return; }
+> 
+> per coding style you should never oneline ifs
+
+Thanks. I've expanded those one-liners throughout.
+
+> 
+> @@ +140,5 @@
+> > +
+> > +var runExperiment = function() {
+> > +  if (isExiting) { return; }
+> > +  // get a window, or wait till a window is opened, then continue.
+> > +  var win = Services.wm.getMostRecentWindow('navigator:browser');
+> 
+> Use RecentWindow.jsm::getMostRecentBrowserWindow
+
+Fantastic. Thanks for the tip.
+
+> 
+> @@ +150,5 @@
+> > +};
+> > +
+> > +var _runExperiment = function() {
+> > +  if (isExiting) { return; }
+> > +  return PlacesUtils.promiseDBConnection()
+> 
+> returning a promise is pointless since you are invoking this as a normal
+> function, you might want to just close the chain with a .catch(error => { //
+> do something with error })
+
+Yeah, using a Task makes this all so much simpler :-)
+
+> 
+> but first, let me clarify why I was suggesting to use Task.jsm...
+> 
+> @@ +160,5 @@
+> > +    // yahoo bits
+> > +    .then(PlacesUtils.promiseDBConnection, onError.bind(null, 'promiseDBConnection.yahoo'))
+> > +    .then(function(db) {
+> > +      return db.execute(query, searchProviders['yahoo']);
+> > +    }, onError.bind(null, 'getYahooCount'))
+> 
+> Basically this would become
+> 
+> let _runExperiment = Task.async(function* () {
+>   if (isExiting) {
+>     return;
+>   }
+> 
+>   let db = yield PlacesUtils.promiseDBConnection();
+> 
+>   for (let providerName in searchProviders) {
+>     try {
+>       yield db.execute(query, searchProviders['google'];
+>       saveCount('google');
+>     } catch (ex) {
+>       onError(...);
+>     }
+>   }
+>   try {
+>     ...totalCount
+>   } catch (ex) {
+>     ...
+>   }
+> });
+> 
+> Then you would invoke this like:
+> 
+> _runExperiment.catch(ex => {
+>   // do something with the exception.
+> }).then(()=> {
+>   uninstall();
+> });
+> 
+> You see this is far more readable than a long chain of promises and error
+> handlers since it's like normal synchronous code, and can be expanded to new
+> engines very easily (nothing to do since there's a for loop)
+> If you want to interrupt at the first error, just remove the try/catches,
+> the exception will be handled by the external catch.
+
+OK, I spent some quality time with Task.jsm, and it finally dawned on me:
+tasks give you all the readability and niceness of generator code internal
+to the task function, while external consumers of the task enjoy the simplicity
+of managing a promise, rather than an iterator.
+
+Thanks for the very detailed example. I've updated the code to use tasks.
