@@ -68,7 +68,9 @@ function saveCount(providerName, results) {
 }
 
 function getTotalCount(db) {
-  if (isExiting) { return Promise.reject(new Error('aborting because isExiting is true')); }
+  if (isExiting) {
+    return Promise.reject(new Error('aborting because isExiting is true'));
+  }
   const totalQuery = 'SELECT COUNT(*) AS count FROM moz_historyvisits;';
   return db.execute(totalQuery);
 }
@@ -81,7 +83,9 @@ function percentage(a, b) {
 }
 
 function sendBeacon(url, data) {
-  if (isExiting) { return; }
+  if (isExiting) {
+    return;
+  }
   try {
     window.navigator.sendBeacon(url, data);
   } catch (ex) {
@@ -136,7 +140,9 @@ let windowListener = {
 };
 
 function runExperiment() {
-  if (isExiting) { return; }
+  if (isExiting) {
+    return;
+  }
   // get a window, or wait till a window is opened, then continue.
   let win = Services.wm.getMostRecentWindow('navigator:browser');
   if (win) {
@@ -147,7 +153,9 @@ function runExperiment() {
 }
 
 function _runExperiment() {
-  if (isExiting) { return; }
+  if (isExiting) {
+    return;
+  }
   return PlacesUtils.promiseDBConnection()
     // google bits
     .then(function(db) {
