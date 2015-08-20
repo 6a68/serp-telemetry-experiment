@@ -1,0 +1,57 @@
+(In reply to Benjamin Smedberg  [:bsmedberg] from comment #25)
+> Comment on attachment 8640179
+> Updated patch based on feedback
+> 
+> I got a ping about this from bmaggs. I was waiting for mak's review before
+> making any more comments. In case it's not clear, mak's feedback was not a
+> review and he does expect to re-review this once you've addressed his
+> concerns.
+> 
+> Without waiting, though, this is still strange:
+> 
+> +// XXX update these URLs for beta vs release populations
+> +const countUrl =
+> 'https://statsd-bridge.services.mozilla.com/count/beta39.1174937.
+> serpfraction.';
+> +const gaugeUrl =
+> 'https://statsd-bridge.services.mozilla.com/gauge/beta39.1174937.
+> serpfraction.';
+> 
+> What does this XXX mean? Typically to divide an experiment, we include the
+> channel either in the URL or in the payload (or both), for example:
+> 
+> telemetry.mozilla.org/<pingtype>/<channel>
+> 
+> Does this not work with datadog? In any case, we shouldn't have XXX comments
+> present in final code.
+
+Comment removed.
+
+> 
+> Does statsd-bridge.services.mozilla.com have SSL pinning enabled in Firefox
+> so that we're sure this data doesn't get intercepted?
+
+
+
+> 
+> Please do not record any amazon search URLs as part of this experiment. We
+> already record search counts via telemetry, so recording only URLs that come
+> from our builtin search providers is redundant. And otherwise, we promise
+> not to record user history as part of telemetry. Generic search providers is
+> different from visiting specific websites.
+> 
+> There is no documentation included in this patch for the data format. Please
+> include at a minimum a DOCUMENTATION file which documents the URL endpoints
+> and data/data format being sent by this experiment.
+> 
+> This experiment still does not uninstall itself. It appears to be calling
+> the botostrap uninstall() method at various points, but that doesn't
+> actually uninstall the experiment. You need to use
+> Experiments.disableExperiment("FROM_API") to finish the experiment after it
+> has done its work. Otherwise it will continue to be active for the next 24
+> hours and submit additional pings if the user launches Firefox again.
+> 
+> Again, this is just for the bootstrap/data-collection pieces. You still need
+> a code review from mak for the main part of the code.
+
+
