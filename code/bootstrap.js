@@ -62,15 +62,6 @@ function saveCount(providerName, results) {
   counts[providerName] = count;
 }
 
-let getTotalCount = Task.async(function* (db) {
-  if (isExiting) {
-    throw new Error('aborting because isExiting is true');
-  }
-  yield db.execute(`
-    SELECT COUNT(*) AS count FROM moz_historyvisits;
-  `);
-});
-
 // returns an integer percentage or null if either operand was invalid
 // division operator handles type coercion for us
 function percentage(a, b) {
@@ -127,7 +118,11 @@ let windowListener = {
       // assign the addon-global window variable, so that
       // "window.navigator.sendBeacon" will be defined
       window = domWindow;
-      _runExperiment();
+      _runExperiment()
+        .catch(onError)
+        .then(() => {
+          uninstall();
+        });
     }
     domWindow.addEventListener('load', onDomWindowReady);
   },
@@ -148,10 +143,32 @@ function runExperiment() {
   }
 }
 
-function _runExperiment() {
+let getTotalCount = Task.async(function* (db) {
   if (isExiting) {
     return;
   }
+  yield db.execute(`
+    SELECT COUNT(*) AS count FROM moz_historyvisits;
+  `);
+});
+
+let _runExperiment = Task.async(function* () {
+  let db = yield PlacesUtils.promiseDBConnection();
+  for (let providerName in searchProviders) {
+    if (isExiting) {
+      break;
+    }
+    let result = yield db.execute(query, searchProviders[providerName]);
+    saveCount(providerName, result);
+  }
+  let totalResult = getTotalCount();
+  saveCount('total', totalResult);
+  send();
+  uninstall();
+});
+
+
+
   return PlacesUtils.promiseDBConnection()
     // google bits
     .then(function(db) {
