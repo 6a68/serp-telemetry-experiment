@@ -25,13 +25,21 @@
 > Does this not work with datadog? In any case, we shouldn't have XXX comments
 > present in final code.
 
-Comment removed.
+I've removed the comment.
 
 > 
 > Does statsd-bridge.services.mozilla.com have SSL pinning enabled in Firefox
 > so that we're sure this data doesn't get intercepted?
 
+I looked into this, and pinning is indeed enabled.
 
+More detail, in case you're interested: ulfr pointed me at this config file,
+which shows that all subdomains of services.m.c are pinned to Digicert:
+
+https://mxr.mozilla.org/mozilla-central/source/security/manager/tools/PreloadedHPKPins.json#215
+
+The cert for statsd-bridge is issued by Digicert, which I verified by visiting
+the page and examining the cert. So, we're all set there.
 
 > 
 > Please do not record any amazon search URLs as part of this experiment. We
@@ -39,6 +47,16 @@ Comment removed.
 > from our builtin search providers is redundant. And otherwise, we promise
 > not to record user history as part of telemetry. Generic search providers is
 > different from visiting specific websites.
+
+Recording search counts via telemetry is irrelevant here; the goal of this experiment
+is to determine the *fraction* of visits that correspond to search result pages.
+
+As I mentioned in my earlier comment (comment 21), the amazon URL we're matching
+seems to be specific to amazon searches initiated in the browser. We count up the
+number of visits to that URL, then divide by the total number of visits. I don't
+quite see how this amounts to recording user history, could you maybe explain
+your concern in a bit more detail?
+
 > 
 > There is no documentation included in this patch for the data format. Please
 > include at a minimum a DOCUMENTATION file which documents the URL endpoints
@@ -50,8 +68,22 @@ Comment removed.
 > Experiments.disableExperiment("FROM_API") to finish the experiment after it
 > has done its work. Otherwise it will continue to be active for the next 24
 > hours and submit additional pings if the user launches Firefox again.
+
+I noticed that these two requirements (DOCUMENTATION file and needing to call
+Experiments.disableExperiment) aren't documented anywhere, don't show up in any
+of the past experiments in the telemetry-experiments-server repo, and weren't
+mentioned in the first review.
+
+To help move reviews along more quickly in the future, I've documented these points
+in the Engineering section of the Telemetry Experiments wiki page. I'm sure I've
+introduced some errors there, but hopefully it's a step in the right direction, and
+you can fill in gaps / make corrections.
+
+I've also updated the MDN page for install.rdf to document that type=128 corresponds
+to telemetry experiments.
+
 > 
 > Again, this is just for the bootstrap/data-collection pieces. You still need
 > a code review from mak for the main part of the code.
 
-
+Sounds good! I'll r? you and ::mak on the next round.
