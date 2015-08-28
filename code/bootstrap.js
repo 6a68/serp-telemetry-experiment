@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-'use strict';
+"use strict";
 
 const {classes: Cc, interfaces: Ci, utils: Cu} = Components;
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
@@ -12,6 +12,8 @@ XPCOMUtils.defineLazyModuleGetter(this, "Services",
                                   "resource://gre/modules/Services.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "RecentWindow",
                                   "resource:///modules/RecentWindow.jsm");
+XPCOMUtils.defineLazyModuleGetter(this, "Experiments",
+                                  "resource:///modules/experiments/Experiments.jsm");
 /*
  * experiment code
  */
@@ -28,25 +30,25 @@ const query = `SELECT SUM(visit_count) AS count, url FROM moz_places
 // to wait until a DOMWindow is ready (see runExperiment below)
 let window;
 
-const countUrl = 'https://statsd-bridge.services.mozilla.com/count/beta39.1174937.serpfraction.';
-const gaugeUrl = 'https://statsd-bridge.services.mozilla.com/gauge/beta39.1174937.serpfraction.';
+const countUrl = "https://statsd-bridge.services.mozilla.com/count/beta39.1174937.serpfraction.";
+const gaugeUrl = "https://statsd-bridge.services.mozilla.com/gauge/beta39.1174937.serpfraction.";
 
 const searchProviders = {
   google: {
-    reversed: 'moc.elgoog.',
-    fuzzy: '%google.com/search?q%'
+    reversed: "moc.elgoog.",
+    fuzzy: "%google.com/search?q%"
   },
   yahoo: {
-    reversed: 'moc.oohay.',
-    fuzzy: '%search.yahoo.com/yhs/search?p%'
+    reversed: "moc.oohay.",
+    fuzzy: "%search.yahoo.com/yhs/search?p%"
   },
   bing: {
-    reversed: 'moc.gnib.',
-    fuzzy: '%bing.com/search?q%'
+    reversed: "moc.gnib.",
+    fuzzy: "%bing.com/search?q%"
   },
   amazon: {
-    reversed: 'moc.nozama.',
-    fuzzy: '%amazon.com/s?%'
+    reversed: "moc.nozama.",
+    fuzzy: "%amazon.com/s?%"
   }
 };
 
@@ -60,7 +62,7 @@ const counts = {
 
 function saveCount(providerName, results) {
   // query returns undefined if there are no visits to the specified page; replace with 0
-  let count = results && results[0] && results[0].getResultByName('count') || 0;
+  let count = results && results[0] && results[0].getResultByName("count") || 0;
   counts[providerName] = count;
 }
 
@@ -87,23 +89,23 @@ function sendBeacon(url, data) {
 // provider, or increment an error counter. Also send down the total history
 // size for that user, and increment the total count of responding clients.
 function send(data) {
-  ['google', 'yahoo', 'bing', 'amazon'].forEach(function(provider) {
+  ["google", "yahoo", "bing", "amazon"].forEach(function(provider) {
     let pct = percentage(counts[provider], counts.total);
     if (pct !== null) {
       sendBeacon(gaugeUrl + provider, pct);
     } else {
-      sendBeacon(countUrl + provider + '.error', 1);
+      sendBeacon(countUrl + provider + ".error", 1);
     }
   });
-  sendBeacon(gaugeUrl + 'total', counts.total);
-  sendBeacon(countUrl + 'clients', 1);
+  sendBeacon(gaugeUrl + "total", counts.total);
+  sendBeacon(countUrl + "clients", 1);
 }
 
 // If an error occurs when querying or connecting to the DB, just give up:
 // fire a beacon with the name of the failed step (in dot-delimited statsd
 // format) and uninstall the experiment.
 function onError(step, err) {
-  sendBeacon(countUrl + 'error.' + step, 1)
+  sendBeacon(countUrl + "error." + step, 1)
   uninstall();
 }
 
@@ -116,7 +118,7 @@ let windowListener = {
     let domWindow = aWindow.QueryInterface(Ci.nsIInterfaceRequestor).
                             getInterface(Ci.nsIDOMWindowInternal || Ci.nsIDOMWindow);
     function onDomWindowReady() {
-      domWindow.removeEventListener('load', onDomWindowReady);
+      domWindow.removeEventListener("load", onDomWindowReady);
       // assign the addon-global window variable, so that
       // "window.navigator.sendBeacon" will be defined
       window = domWindow;
@@ -126,7 +128,7 @@ let windowListener = {
           uninstall();
         });
     }
-    domWindow.addEventListener('load', onDomWindowReady);
+    domWindow.addEventListener("load", onDomWindowReady);
   },
   onCloseWindow: function(aWindow) {},
   onWindowTitleChange: function(aWindow, aTitle) {}
@@ -164,46 +166,10 @@ let _runExperiment = Task.async(function* () {
     saveCount(providerName, result);
   }
   let totalResult = getTotalCount();
-  saveCount('total', totalResult);
+  saveCount("total", totalResult);
   send();
   uninstall();
 });
-
-
-
-  return PlacesUtils.promiseDBConnection()
-    // google bits
-    .then(function(db) {
-      return db.execute(query, searchProviders['google']);
-    }, onError.bind(null, 'getGoogleCount'))
-    .then(saveCount.bind(null, 'google'), onError.bind(null, 'saveCount.google'))
-    // yahoo bits
-    .then(PlacesUtils.promiseDBConnection, onError.bind(null, 'promiseDBConnection.yahoo'))
-    .then(function(db) {
-      return db.execute(query, searchProviders['yahoo']);
-    }, onError.bind(null, 'getYahooCount'))
-    .then(saveCount.bind(null, 'yahoo'), onError.bind(null, 'saveCount.yahoo'))
-    // bing bits
-    .then(PlacesUtils.promiseDBConnection, onError.bind(null, 'promiseDBConnection.bing'))
-    .then(function(db) {
-      return db.execute(query, searchProviders['yahoo']);
-    }, onError.bind(null, 'getBingCount'))
-    .then(saveCount.bind(null, 'bing'), onError.bind(null, 'saveCount.bing'))
-    // amzn bits
-    .then(PlacesUtils.promiseDBConnection, onError.bind(null, 'promiseDBConnection.amazon'))
-    .then(function(db) {
-      return db.execute(query, searchProviders['amazon']);
-    }, onError.bind(null, 'getAmazonCount'))
-    .then(saveCount.bind(null, 'amazon'), onError.bind(null, 'saveCount.amazon'))
-    // total
-    .then(PlacesUtils.promiseDBConnection, onError.bind(null, 'promiseDBConnection.total'))
-    .then(getTotalCount, onError.bind(null, 'getTotalCount'))
-    .then(saveCount.bind(null, 'total'), onError.bind(null, 'saveCount.total'))
-    // send results to server
-    .then(send, onError.bind(null, 'send'))
-    // when finished, uninstall yourself
-    .then(uninstall, onError.bind(null, 'uninstall'));
-}
 
 function exit() {
   // abort any future Places queries or beacons
@@ -218,7 +184,7 @@ function startup() {
   try {
     runExperiment();
   } catch(ex) {
-    onError('startup', ex);
+    onError("startup", ex);
   }
 }
 function shutdown() {
@@ -228,5 +194,6 @@ function install() {
 }
 function uninstall() {
   exit();
+  Experiments.disableExperiment("FROM_API");
 }
 
