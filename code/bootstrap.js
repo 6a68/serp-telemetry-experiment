@@ -47,10 +47,6 @@ const searchProviders = {
   bing: {
     reversed: "moc.gnib.",
     fuzzy: "%bing.com/search?q%"
-  },
-  amazon: {
-    reversed: "moc.nozama.",
-    fuzzy: "%amazon.com/s?%"
   }
 };
 
@@ -58,7 +54,6 @@ const counts = {
   google: null,
   yahoo: null,
   bing: null,
-  amazon: null,
   total: null
 };
 
@@ -91,7 +86,7 @@ function sendBeacon(url, data) {
 // provider, or increment an error counter. Also send down the total history
 // size for that user, and increment the total count of responding clients.
 function send(data) {
-  ["google", "yahoo", "bing", "amazon"].forEach(function(provider) {
+  ["google", "yahoo", "bing"].forEach(function(provider) {
     let pct = percentage(counts[provider], counts.total);
     if (pct !== null) {
       sendBeacon(gaugeUrl + provider, pct);
