@@ -68,7 +68,7 @@ function saveCount(providerName, results) {
   counts[providerName] = count;
 }
 
-// returns an integer percentage or null if either operand was invalid
+// returns an integer percentage or null if either operand was invalid.
 // division operator handles type coercion for us
 function percentage(a, b) {
   const result = a / b;
@@ -121,6 +121,11 @@ let windowListener = {
                             getInterface(Ci.nsIDOMWindowInternal || Ci.nsIDOMWindow);
     function onDomWindowReady() {
       domWindow.removeEventListener("load", onDomWindowReady);
+      // if this is not a browser window, bail
+      let windowType = domWindow.document.documentElement.getAttribute("windowtype");
+      if (windowType !== "navigator:browser") {
+        return;
+      }
       // assign the addon-global window variable, so that
       // "window.navigator.sendBeacon" will be defined
       window = domWindow;
@@ -153,7 +158,7 @@ let getTotalCount = Task.async(function* (db) {
   if (isExiting) {
     return;
   }
-  yield db.execute(`
+  return yield db.execute(`
     SELECT COUNT(*) AS count FROM moz_historyvisits;
   `);
 });
