@@ -32,8 +32,8 @@ const query = `SELECT SUM(visit_count) AS count, url FROM moz_places
 // to wait until a DOMWindow is ready (see runExperiment below)
 let window;
 
-const countUrl = "https://statsd-bridge.services.mozilla.com/count/beta39.1174937.serpfraction.";
-const gaugeUrl = "https://statsd-bridge.services.mozilla.com/gauge/beta39.1174937.serpfraction.";
+const countUrl = "https://statsd-bridge.services.mozilla.com/count/beta42.1174937.serpfraction.";
+const gaugeUrl = "https://statsd-bridge.services.mozilla.com/gauge/beta42.1174937.serpfraction.";
 
 const searchProviders = {
   google: {
