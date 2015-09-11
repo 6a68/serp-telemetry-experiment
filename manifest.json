@@ -5,9 +5,9 @@
   "description": "An experiment that measures what percentage of history visits are search result pages. The search percentage data is anonymous.",
   "info": "https://bugzilla.mozilla.org/show_bug.cgi?id=1174937",
   "manifest": {
-    "id": "serp-fraction-counts-beta39@experiments.mozilla.org",
-    "startTime": "TBD start date",
-    "endTime": "TBD start date plus seven days",
+    "id": "serp-fraction-counts-beta42@experiments.mozilla.org",
+    "startTime": "1411430400",
+    "endTime": "1412035200",
     "maxActiveSeconds": 86400,
     "appName": ["Firefox"],
     "channel": ["beta"],
