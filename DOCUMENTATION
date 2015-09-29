@@ -1,0 +1,105 @@
+# DOCUMENTATION
+
+This file documents the data collected, basic facts about the server and
+client, including a complete list of endpoints, and their meaning.
+
+
+## Client data sending overview
+
+`navigator.sendBeacon` is used to send data without competing with the user's
+web browsing.
+
+Individual data points are POSTed to the endpoints specified below. The packet
+contains just a single number in the request body, as usual with statsd data.
+Each endpoint fully specifies the 'key' to which the request body corresponds
+as a numeric 'value'.
+
+
+## Server overview
+
+Our statsd-over-http server is located at:
+  https://statsd-bridge.services.mozilla.com
+
+The server source code is located at:
+  https://github.com/mozilla-services/datadog-bridge
+
+The server's SSL cert is pinned in Firefox, along with all other
+services.mozilla.com subdomains. See the 'services.mozilla.com' entry in the
+'entries' object in this file:
+  https://mxr.mozilla.org/mozilla-central/source/security/manager/tools/PreloadedHPKPins.json
+
+Our server forwards the data points to datadog, a dashboarding service that
+has been legally approved for non-personally identifiable data visualization.
+It's used already by other services / cloud ops projects.
+
+We use two statsd data types in our reporting: gauges and counters. The data
+type is specified as part of the URL, by putting either /gauge/ or /count/ in
+the URL itself (see below for examples).
+
+* Gauges are decimal numbers representing arbitrary data values.
+* Counters are whole number counts of events. We use them mostly for
+  incrementing error event counters when something fails.
+
+Learn more: http://docs.datadoghq.com/guides/dogstatsd/#metrics
+
+
+## The complete set of endpoints
+
+Every count has the number '1' as its request body, because the counts are
+experiment-global counters of events, like errors.
+
+### Search Provider Visit Percentage
+
+The percentage of visits corresponding to a given search provider is sent to
+one of these endpoints:
+
+  https://statsd-bridge.services.mozilla.com/gauge/beta42.1174937.serpfraction.google
+  https://statsd-bridge.services.mozilla.com/gauge/beta42.1174937.serpfraction.yahoo
+  https://statsd-bridge.services.mozilla.com/gauge/beta42.1174937.serpfraction.bing
+
+The request body is the percentage given as an integer.
+
+
+### Search Provider Visit Percentage Errors
+
+If we encounter errors in calculating a given provider's percentage of visits,
+then we increment error counters corresponding to the failed provider:
+
+  https://statsd-bridge.services.mozilla.com/count/beta42.1174937.serpfraction.google.error
+  https://statsd-bridge.services.mozilla.com/count/beta42.1174937.serpfraction.yahoo.error
+  https://statsd-bridge.services.mozilla.com/count/beta42.1174937.serpfraction.bing.error
+
+
+### Total Number of Visits in History
+
+The total number of visits is sent to this endpoint:
+
+  https://statsd-bridge.services.mozilla.com/gauge/beta42.1174937.serpfraction.total
+
+The request body contains the integer total number of visits.
+
+
+### Participating Firefox Instance Counter
+
+Each FF instance, when it sends data, also increments a count of the total number
+of FF clients that have contributed data to the experiment, by pinging this endpoint:
+
+  https://statsd-bridge.services.mozilla.com/count/beta42.1174937.serpfraction.clients
+
+
+### Startup Error Counter
+
+If an error occurs during startup, the error message is discarded, as it might
+well contain information that could identify the user, and this error counter is incremented:
+
+  https://statsd-bridge.services.mozilla.com/count/beta42.1174937.serpfraction.error.startup
+
+
+### Experiment Error Counter
+
+If an error occurs while the experiment is running, again, the error message is
+discarded, and this error counter is incremented:
+
+  https://statsd-bridge.services.mozilla.com/count/beta42.1174937.serpfraction.error.experiment
+
+
