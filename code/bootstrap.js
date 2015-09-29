@@ -101,7 +101,7 @@ function send(data) {
 // If an error occurs when querying or connecting to the DB, just give up:
 // fire a beacon with the name of the failed step (in dot-delimited statsd
 // format) and uninstall the experiment.
-function onError(step, err) {
+function onError(step) {
   sendBeacon(countUrl + "error." + step, 1)
   uninstall();
 }
@@ -125,7 +125,9 @@ let windowListener = {
       // "window.navigator.sendBeacon" will be defined
       window = domWindow;
       _runExperiment()
-        .catch(onError)
+        .catch(() => {
+          onError("experiment");
+        })
         .then(() => {
           uninstall();
         });
@@ -186,7 +188,7 @@ function startup() {
   try {
     runExperiment();
   } catch(ex) {
-    onError("startup", ex);
+    onError("startup");
   }
 }
 function shutdown() {
