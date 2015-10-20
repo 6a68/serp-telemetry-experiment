@@ -6,8 +6,8 @@
   "info": "https://bugzilla.mozilla.org/show_bug.cgi?id=1174937",
   "manifest": {
     "id": "serp-fraction-counts-beta42@experiments.mozilla.org",
-    "startTime": "1443830400",
-    "endTime": "1444435200",
+    "startTime": "1447113600",
+    "endTime": "1447718400",
     "maxActiveSeconds": 86400,
     "appName": ["Firefox"],
     "channel": ["beta"],
