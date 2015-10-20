@@ -184,7 +184,20 @@ function exit() {
  *  bootstrapped addon code
  */
 
+// the startup method is apparently called twice, so you have to guard against
+// that manually via gStarted. See
+//   https://bugzilla.mozilla.org/show_bug.cgi?id=1174937#c44
+// and see also, for example,
+//   http://hg.mozilla.org/webtools/telemetry-experiment-server/file/ (cont'd)
+//   59365ce5cabe/experiments/flash-protectedmode-beta/code/bootstrap.js#l12
+var gStarted = false;
+
 function startup() {
+  if (gStarted) {
+    return;
+  }
+  gStarted = true;
+
   try {
     runExperiment();
   } catch(ex) {
