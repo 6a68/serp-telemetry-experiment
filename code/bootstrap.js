@@ -160,8 +160,12 @@ let windowListener = {
      let domWindow = aWindow.QueryInterface(Ci.nsIInterfaceRequestor).
                              getInterface(Ci.nsIDOMWindow);
       console.log('Telex.onOpenWindow: does domWindow exist?', domWindow);
-      domWindow.addEventListener("load", onDomWindowReady);
-      console.log('Telex.onOpenWindow: added load listener, but did we do it too late?');
+      if (domWindow && domWindow.document && domWindow.document.readyState === 'complete') {
+        console.log('window document is loaded, so lets just get to work');
+        onDomWindowReady(domWindow);
+      } else {
+        domWindow.addEventListener("load", onDomWindowReady);
+      }
     } catch (ex) {
       console.error('Telex.onOpenWindow failed: ', ex);
     }
