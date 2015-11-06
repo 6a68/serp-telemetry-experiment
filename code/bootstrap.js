@@ -83,6 +83,7 @@ function percentage(a, b) {
   const result = a / b;
   const p = isFinite(result) ? Math.round(result * 100) : null;
   console.log('Telex.percentage of ' + a + ' / ' + b + ' is ' + p);
+  return p;
 }
 
 function sendBeacon(url, data) {
