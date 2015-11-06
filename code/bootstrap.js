@@ -226,7 +226,7 @@ let _runExperiment = Task.async(function* () {
     }
   }
   console.log('Telex._runExperiment: done iterating search providers, now getting total');
-  let totalResult = getTotalCount(db);
+  let totalResult = yield getTotalCount(db);
   console.log('Telex._runExperiment: totalResult is ', totalResult);
   saveCount("total", totalResult);
   send(counts);
