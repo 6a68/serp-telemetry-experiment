@@ -134,7 +134,8 @@ function onDomWindowReady(domWindow) {
     }
     // assign the addon-global window variable, so that
     // "window.navigator.sendBeacon" will be defined
-    window = domWindow;
+    /// disabled for scratchpad testing 
+    /// window = domWindow;
     _runExperiment()
       .catch(() => {
       onError("experiment");
