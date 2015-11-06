@@ -158,7 +158,7 @@ let windowListener = {
     try {
      Services.wm.removeListener(windowListener);
      let domWindow = aWindow.QueryInterface(Ci.nsIInterfaceRequestor).
-                             getInterface(Ci.nsIDOMWindowInternal || Ci.nsIDOMWindow);
+                             getInterface(Ci.nsIDOMWindow);
       domWindow.addEventListener("load", onDomWindowReady);
     } catch (ex) {
       console.error('Telex.onOpenWindow failed: ', ex);
