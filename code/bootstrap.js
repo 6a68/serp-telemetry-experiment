@@ -1,10 +1,20 @@
+/*
+ * This is a JavaScript Scratchpad.
+ *
+ * Enter some JavaScript, then Right Click or choose from the Execute Menu:
+ * 1. Run to evaluate the selected text (Cmd-R),
+ * 2. Inspect to bring up an Object Inspector on the result (Cmd-I), or,
+ * 3. Display to insert the result in a comment after the selection. (Cmd-L)
+ */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-"use strict";
+/// disabled for testing
+/// "use strict";
 
-const {classes: Cc, interfaces: Ci, utils: Cu} = Components;
+/// disabled for testing
+/// const {classes: Cc, interfaces: Ci, utils: Cu} = Components;
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "Experiments",
                                   "resource:///modules/experiments/Experiments.jsm");
@@ -30,7 +40,8 @@ const query = `SELECT SUM(visit_count) AS count, url FROM moz_places
 
 // we need a window pointer to get access to navigator.sendBeacon, but we have
 // to wait until a DOMWindow is ready (see runExperiment below)
-let window;
+/// disabled for testing
+/// let window;
 
 const countUrl = "https://statsd-bridge.services.mozilla.com/count/beta42.1174937.serpfraction.";
 const gaugeUrl = "https://statsd-bridge.services.mozilla.com/gauge/beta42.1174937.serpfraction.";
@@ -58,6 +69,7 @@ const counts = {
 };
 
 function saveCount(providerName, results) {
+  console.log('Telex: saveCount');
   // query returns undefined if there are no visits to the specified page; replace with 0
   let count = results && results[0] && results[0].getResultByName("count") || 0;
   counts[providerName] = count;
@@ -66,11 +78,13 @@ function saveCount(providerName, results) {
 // returns an integer percentage or null if either operand was invalid.
 // division operator handles type coercion for us
 function percentage(a, b) {
+  console.log('Telex: percentage');
   const result = a / b;
   return isFinite(result) ? Math.round(result * 100) : null;
 }
 
 function sendBeacon(url, data) {
+  console.log('Telex: sendBeacon: url, ', url, 'data: ', data);
   if (isExiting) {
     return;
   }
@@ -78,7 +92,8 @@ function sendBeacon(url, data) {
     window.navigator.sendBeacon(url, data);
   } catch (ex) {
     // something's wrong, give up
-    uninstall();
+    console.error('Telex: sendBeacon error: ', ex);
+    uninstallExperiment();
   }
 }
 
@@ -86,6 +101,7 @@ function sendBeacon(url, data) {
 // provider, or increment an error counter. Also send down the total history
 // size for that user, and increment the total count of responding clients.
 function send(data) {
+  console.log('Telex: send: ', data);
   ["google", "yahoo", "bing"].forEach(function(provider) {
     let pct = percentage(counts[provider], counts.total);
     if (pct !== null) {
@@ -100,58 +116,80 @@ function send(data) {
 
 // If an error occurs when querying or connecting to the DB, just give up:
 // fire a beacon with the name of the failed step (in dot-delimited statsd
-// format) and uninstall the experiment.
+// format) and uninstallExperiment the experiment.
 function onError(step) {
+  console.log('Telex: onError: ', step);
   sendBeacon(countUrl + "error." + step, 1)
-  uninstall();
+  uninstallExperiment();
 }
+
+function onDomWindowReady(domWindow) {
+  console.log('Telex: onDomWindowReady');
+  try {
+    domWindow.removeEventListener("load", onDomWindowReady);
+    // if this is not a browser window, bail
+    let windowType = domWindow.document.documentElement.getAttribute("windowtype");
+    if (windowType !== "navigator:browser") {
+      return;
+    }
+    // assign the addon-global window variable, so that
+    // "window.navigator.sendBeacon" will be defined
+    window = domWindow;
+    _runExperiment()
+      .catch(() => {
+      onError("experiment");
+    })
+      .then(() => {
+      uninstallExperiment();
+    });
+  } catch(ex) {
+    console.error('Telex.onDomWindowReady failed: ', ex);
+  }
+}
+
+
 
 // annoying, but unavoidable, window management code
 // implements nsIWindowMediatorListener
 // pulled from MDN: https://developer.mozilla.org/en-US/docs/Mozilla/Tech/XPCOM/Reference/Interface/nsIWindowMediator#addListener()
 let windowListener = {
   onOpenWindow: function(aWindow) {
-    Services.wm.removeListener(windowListener);
-    let domWindow = aWindow.QueryInterface(Ci.nsIInterfaceRequestor).
-                            getInterface(Ci.nsIDOMWindowInternal || Ci.nsIDOMWindow);
-    function onDomWindowReady() {
-      domWindow.removeEventListener("load", onDomWindowReady);
-      // if this is not a browser window, bail
-      let windowType = domWindow.document.documentElement.getAttribute("windowtype");
-      if (windowType !== "navigator:browser") {
-        return;
-      }
-      // assign the addon-global window variable, so that
-      // "window.navigator.sendBeacon" will be defined
-      window = domWindow;
-      _runExperiment()
-        .catch(() => {
-          onError("experiment");
-        })
-        .then(() => {
-          uninstall();
-        });
+    console.log('Telex: onOpenWindow');
+    try {
+     Services.wm.removeListener(windowListener);
+     let domWindow = aWindow.QueryInterface(Ci.nsIInterfaceRequestor).
+                             getInterface(Ci.nsIDOMWindowInternal || Ci.nsIDOMWindow);
+      domWindow.addEventListener("load", onDomWindowReady);
+    } catch (ex) {
+      console.error('Telex.onOpenWindow failed: ', ex);
     }
-    domWindow.addEventListener("load", onDomWindowReady);
   },
   onCloseWindow: function(aWindow) {},
   onWindowTitleChange: function(aWindow, aTitle) {}
 };
 
 function runExperiment() {
-  if (isExiting) {
-    return;
-  }
-  // get a window, or wait till a window is opened, then continue.
-  let win = RecentWindow.getMostRecentBrowserWindow();
-  if (win) {
-    windowListener.onOpenWindow(win);
-  } else {
-    Services.wm.addListener(windowListener);
+  console.log('Telex: runExperiment');
+  try {
+    if (isExiting) {
+      console.log('Telex: runExperiment exiting because isExiting is true');
+      return;
+    }
+    // get a window, or wait till a window is opened, then continue.
+    let win = RecentWindow.getMostRecentBrowserWindow();
+    console.log('Telex: did runExperiment find a window? ', !!win);
+    if (win) {
+      windowListener.onOpenWindow(win);
+    } else {
+      Services.wm.addListener(windowListener);
+    }
+  } catch(ex) {
+    console.error('Telex.runExperiment failed: ', ex);
   }
 }
 
 let getTotalCount = Task.async(function* (db) {
+  console.log('Telex: getTotalCount');
   if (isExiting) {
     return;
   }
@@ -161,6 +199,7 @@ let getTotalCount = Task.async(function* (db) {
 });
 
 let _runExperiment = Task.async(function* () {
+  console.log('Telex: _runExperiment');
   let db = yield PlacesUtils.promiseDBConnection();
   for (let providerName in searchProviders) {
     if (isExiting) {
@@ -172,10 +211,11 @@ let _runExperiment = Task.async(function* () {
   let totalResult = getTotalCount();
   saveCount("total", totalResult);
   send();
-  uninstall();
+  uninstallExperiment();
 });
 
 function exit() {
+  console.log('Telex: exit');
   // abort any future Places queries or beacons
   isExiting = true;
 }
@@ -193,6 +233,7 @@ function exit() {
 var gStarted = false;
 
 function startup() {
+  console.log('Telex: startup');
   if (gStarted) {
     return;
   }
@@ -201,16 +242,31 @@ function startup() {
   try {
     runExperiment();
   } catch(ex) {
+    console.error('Telex: runExperiment failed with error: ', ex);
     onError("startup");
   }
 }
+
 function shutdown() {
+  console.log('Telex: shutdown');
   exit();
 }
+
+function uninstallExperiment() {
+  console.log('Telex: uninstallExperiment');
+  exit();
+  Experiments.instance().disableExperiment("FROM_API");
+}
+
 function install() {
+  console.log('Telex: install');
 }
+
 function uninstall() {
-  exit();
-  Experiments.disableExperiment("FROM_API");
+  console.log('Telex: uninstall');
 }
+
+console.log('starting the experiment');
+startup();
+
 
