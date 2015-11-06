@@ -159,7 +159,9 @@ let windowListener = {
      Services.wm.removeListener(windowListener);
      let domWindow = aWindow.QueryInterface(Ci.nsIInterfaceRequestor).
                              getInterface(Ci.nsIDOMWindow);
+      console.log('Telex.onOpenWindow: does domWindow exist?', domWindow);
       domWindow.addEventListener("load", onDomWindowReady);
+      console.log('Telex.onOpenWindow: added load listener, but did we do it too late?');
     } catch (ex) {
       console.error('Telex.onOpenWindow failed: ', ex);
     }
