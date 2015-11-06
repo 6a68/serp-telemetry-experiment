@@ -228,7 +228,7 @@ let _runExperiment = Task.async(function* () {
   let totalResult = getTotalCount(db);
   console.log('Telex._runExperiment: totalResult is ', totalResult);
   saveCount("total", totalResult);
-  send();
+  send(counts);
   uninstallExperiment();
 });
 
