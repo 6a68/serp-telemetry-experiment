@@ -72,6 +72,7 @@ function saveCount(providerName, results) {
   console.log('Telex: saveCount');
   // query returns undefined if there are no visits to the specified page; replace with 0
   let count = results && results[0] && results[0].getResultByName("count") || 0;
+  console.log('Telex.saveCount: the count for ' + providerName + ' is ' + count);
   counts[providerName] = count;
 }
 
