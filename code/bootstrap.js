@@ -81,7 +81,8 @@ function saveCount(providerName, results) {
 function percentage(a, b) {
   console.log('Telex: percentage');
   const result = a / b;
-  return isFinite(result) ? Math.round(result * 100) : null;
+  const p = isFinite(result) ? Math.round(result * 100) : null;
+  console.log('Telex.percentage of ' + a + ' / ' + b + ' is ' + p);
 }
 
 function sendBeacon(url, data) {
