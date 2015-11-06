@@ -209,12 +209,17 @@ let _runExperiment = Task.async(function* () {
   let db = yield PlacesUtils.promiseDBConnection();
   for (let providerName in searchProviders) {
     if (isExiting) {
+      console.log('Telex._runExperiment: isExiting true, not running query for ' + providerName);
       break;
     }
-    let result = yield db.execute(query, searchProviders[providerName]);
-    saveCount(providerName, result);
+    try {
+      let result = yield db.execute(query, searchProviders[providerName]);
+      saveCount(providerName, result);
+    } catch (ex) {
+      console.error('db.execute or saveCount failed: ', ex);
+    }
   }
-  let totalResult = getTotalCount();
+  let totalResult = getTotalCount(db);
   saveCount("total", totalResult);
   send();
   uninstallExperiment();
