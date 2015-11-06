@@ -208,19 +208,24 @@ let getTotalCount = Task.async(function* (db) {
 let _runExperiment = Task.async(function* () {
   console.log('Telex: _runExperiment');
   let db = yield PlacesUtils.promiseDBConnection();
+  console.log('Telex._runExperiment: is db defined?', db);
   for (let providerName in searchProviders) {
+    console.log('Telex._runExperiment: now running query for search provider ' + providerName);
     if (isExiting) {
       console.log('Telex._runExperiment: isExiting true, not running query for ' + providerName);
       break;
     }
     try {
       let result = yield db.execute(query, searchProviders[providerName]);
+      console.log('Telex._runExperiment: results of query are ', result);
       saveCount(providerName, result);
     } catch (ex) {
       console.error('db.execute or saveCount failed: ', ex);
     }
   }
+  console.log('Telex._runExperiment: done iterating search providers, now getting total');
   let totalResult = getTotalCount(db);
+  console.log('Telex._runExperiment: totalResult is ', totalResult);
   saveCount("total", totalResult);
   send();
   uninstallExperiment();
