@@ -10,11 +10,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/// disabled for testing
-/// "use strict";
+"use strict";
 
-/// disabled for testing
-/// const {classes: Cc, interfaces: Ci, utils: Cu} = Components;
+const {classes: Cc, interfaces: Ci, utils: Cu} = Components;
 Cu.import("resource://gre/modules/XPCOMUtils.jsm");
 XPCOMUtils.defineLazyModuleGetter(this, "Experiments",
                                   "resource:///modules/experiments/Experiments.jsm");
@@ -40,8 +38,8 @@ const query = `SELECT SUM(visit_count) AS count, url FROM moz_places
 
 // we need a window pointer to get access to navigator.sendBeacon, but we have
 // to wait until a DOMWindow is ready (see runExperiment below)
-/// disabled for testing
-/// let window;
+disabled for testing
+let window;
 
 const countUrl = "https://statsd-bridge.services.mozilla.com/count/beta42.1174937.serpfraction.";
 const gaugeUrl = "https://statsd-bridge.services.mozilla.com/gauge/beta42.1174937.serpfraction.";
@@ -137,8 +135,8 @@ function onDomWindowReady(domWindow) {
     }
     // assign the addon-global window variable, so that
     // "window.navigator.sendBeacon" will be defined
-    /// disabled for scratchpad testing 
-    /// window = domWindow;
+    disabled for scratchpad testing 
+    window = domWindow;
     _runExperiment()
       .catch(() => {
       onError("experiment");
