@@ -1,11 +1,3 @@
-/*
- * This is a JavaScript Scratchpad.
- *
- * Enter some JavaScript, then Right Click or choose from the Execute Menu:
- * 1. Run to evaluate the selected text (Cmd-R),
- * 2. Inspect to bring up an Object Inspector on the result (Cmd-I), or,
- * 3. Display to insert the result in a comment after the selection. (Cmd-L)
- */
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -283,8 +275,3 @@ function install() {
 function uninstall() {
   console.log('Telex: uninstall');
 }
-
-console.log('starting the experiment');
-startup();
-
-
