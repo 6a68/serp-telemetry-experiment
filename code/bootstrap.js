@@ -30,7 +30,6 @@ const query = `SELECT SUM(visit_count) AS count, url FROM moz_places
 
 // we need a window pointer to get access to navigator.sendBeacon, but we have
 // to wait until a DOMWindow is ready (see runExperiment below)
-disabled for testing
 let window;
 
 const countUrl = "https://statsd-bridge.services.mozilla.com/count/beta42.1174937.serpfraction.";
@@ -119,15 +118,17 @@ function onError(step) {
 function onDomWindowReady(domWindow) {
   console.log('Telex: onDomWindowReady');
   try {
-    domWindow.removeEventListener("load", onDomWindowReady);
+    if (domWindow && donWindow.removeEventListener) {
+      domWindow.removeEventListener("load", onDomWindowReady);
+    }
     // if this is not a browser window, bail
-    let windowType = domWindow.document.documentElement.getAttribute("windowtype");
+    let windowType = domWindow && domWindow.document &&
+                     domWindow.document.documentElement.getAttribute("windowtype");
     if (windowType !== "navigator:browser") {
       return;
     }
     // assign the addon-global window variable, so that
     // "window.navigator.sendBeacon" will be defined
-    disabled for scratchpad testing 
     window = domWindow;
     _runExperiment()
       .catch(() => {
