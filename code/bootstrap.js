@@ -118,7 +118,7 @@ function onError(step) {
 function onDomWindowReady(domWindow) {
   console.log('Telex: onDomWindowReady');
   try {
-    if (domWindow && donWindow.removeEventListener) {
+    if (domWindow && domWindow.removeEventListener) {
       domWindow.removeEventListener("load", onDomWindowReady);
     }
     // if this is not a browser window, bail
