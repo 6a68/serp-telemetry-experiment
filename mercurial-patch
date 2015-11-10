@@ -377,6 +377,14 @@ new file mode 100644
 +function uninstall() {
 +}
 \ No newline at end of file
+diff --git a/experiments/serp-fraction-counts/code/filter.js b/experiments/serp-fraction-counts/code/filter.js
+new file mode 100644
+--- /dev/null
++++ b/experiments/serp-fraction-counts/code/filter.js
++function filter(c) {
++  return c.telemetryEnvironment.settings.telemetryEnabled;
++}
+\ No newline at end of file
 diff --git a/experiments/serp-fraction-counts/code/install.rdf b/experiments/serp-fraction-counts/code/install.rdf
 new file mode 100644
 --- /dev/null
