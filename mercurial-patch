@@ -1,0 +1,430 @@
+# HG changeset patch
+# User Jared Hirsch <6a68@mozilla.com>
+# Parent  59365ce5cabe2ad501e871ca01c577c94a3a7d7e
+
+diff --git a/experiments/serp-fraction-counts/DOCUMENTATION b/experiments/serp-fraction-counts/DOCUMENTATION
+new file mode 100644
+--- /dev/null
++++ b/experiments/serp-fraction-counts/DOCUMENTATION
+@@ -0,0 +1,105 @@
++# DOCUMENTATION
++
++This file documents the data collected, basic facts about the server and
++client, including a complete list of endpoints, and their meaning.
++
++
++## Client data sending overview
++
++`navigator.sendBeacon` is used to send data without competing with the user's
++web browsing.
++
++Individual data points are POSTed to the endpoints specified below. The packet
++contains just a single number in the request body, as usual with statsd data.
++Each endpoint fully specifies the 'key' to which the request body corresponds
++as a numeric 'value'.
++
++
++## Server overview
++
++Our statsd-over-http server is located at:
++  https://statsd-bridge.services.mozilla.com
++
++The server source code is located at:
++  https://github.com/mozilla-services/datadog-bridge
++
++The server's SSL cert is pinned in Firefox, along with all other
++services.mozilla.com subdomains. See the 'services.mozilla.com' entry in the
++'entries' object in this file:
++  https://mxr.mozilla.org/mozilla-central/source/security/manager/tools/PreloadedHPKPins.json
++
++Our server forwards the data points to datadog, a dashboarding service that
++has been legally approved for non-personally identifiable data visualization.
++It's used already by other services / cloud ops projects.
++
++We use two statsd data types in our reporting: gauges and counters. The data
++type is specified as part of the URL, by putting either /gauge/ or /count/ in
++the URL itself (see below for examples).
++
++* Gauges are decimal numbers representing arbitrary data values.
++* Counters are whole number counts of events. We use them mostly for
++  incrementing error event counters when something fails.
++
++Learn more: http://docs.datadoghq.com/guides/dogstatsd/#metrics
++
++
++## The complete set of endpoints
++
++Every count has the number '1' as its request body, because the counts are
++experiment-global counters of events, like errors.
++
++### Search Provider Visit Percentage
++
++The percentage of visits corresponding to a given search provider is sent to
++one of these endpoints:
++
++  https://statsd-bridge.services.mozilla.com/gauge/beta42.1174937.serpfraction.google
++  https://statsd-bridge.services.mozilla.com/gauge/beta42.1174937.serpfraction.yahoo
++  https://statsd-bridge.services.mozilla.com/gauge/beta42.1174937.serpfraction.bing
++
++The request body is the percentage given as an integer.
++
++
++### Search Provider Visit Percentage Errors
++
++If we encounter errors in calculating a given provider's percentage of visits,
++then we increment error counters corresponding to the failed provider:
++
++  https://statsd-bridge.services.mozilla.com/count/beta42.1174937.serpfraction.google.error
++  https://statsd-bridge.services.mozilla.com/count/beta42.1174937.serpfraction.yahoo.error
++  https://statsd-bridge.services.mozilla.com/count/beta42.1174937.serpfraction.bing.error
++
++
++### Total Number of Visits in History
++
++The total number of visits is sent to this endpoint:
++
++  https://statsd-bridge.services.mozilla.com/gauge/beta42.1174937.serpfraction.total
++
++The request body contains the integer total number of visits.
++
++
++### Participating Firefox Instance Counter
++
++Each FF instance, when it sends data, also increments a count of the total number
++of FF clients that have contributed data to the experiment, by pinging this endpoint:
++
++  https://statsd-bridge.services.mozilla.com/count/beta42.1174937.serpfraction.clients
++
++
++### Startup Error Counter
++
++If an error occurs during startup, the error message is discarded, as it might
++well contain information that could identify the user, and this error counter is incremented:
++
++  https://statsd-bridge.services.mozilla.com/count/beta42.1174937.serpfraction.error.startup
++
++
++### Experiment Error Counter
++
++If an error occurs while the experiment is running, again, the error message is
++discarded, and this error counter is incremented:
++
++  https://statsd-bridge.services.mozilla.com/count/beta42.1174937.serpfraction.error.experiment
++
++
+diff --git a/experiments/serp-fraction-counts/code/bootstrap.js b/experiments/serp-fraction-counts/code/bootstrap.js
+new file mode 100644
+--- /dev/null
++++ b/experiments/serp-fraction-counts/code/bootstrap.js
+@@ -0,0 +1,221 @@
++/* This Source Code Form is subject to the terms of the Mozilla Public
++ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
++ * You can obtain one at http://mozilla.org/MPL/2.0/. */
++
++"use strict";
++
++const {classes: Cc, interfaces: Ci, utils: Cu} = Components;
++Cu.import("resource://gre/modules/XPCOMUtils.jsm");
++XPCOMUtils.defineLazyModuleGetter(this, "Experiments",
++                                  "resource:///modules/experiments/Experiments.jsm");
++XPCOMUtils.defineLazyModuleGetter(this, "PlacesUtils",
++                                  "resource://gre/modules/PlacesUtils.jsm");
++XPCOMUtils.defineLazyModuleGetter(this, "RecentWindow",
++                                  "resource:///modules/RecentWindow.jsm");
++XPCOMUtils.defineLazyModuleGetter(this, "Services",
++                                  "resource://gre/modules/Services.jsm");
++XPCOMUtils.defineLazyModuleGetter(this, "Task",
++                                  "resource://gre/modules/Task.jsm");
++/*
++ * experiment code
++ */
++
++// if true, abort any remaining DB requests or beacons
++let isExiting = false;
++
++// see https://bugzil.la/1174937#c16 for explanation of query optimizations
++const query = `SELECT SUM(visit_count) AS count, url FROM moz_places
++               WHERE rev_host BETWEEN :reversed AND :reversed || X'FFFF'
++               AND url LIKE :fuzzy`;
++
++// we need a window pointer to get access to navigator.sendBeacon, but we have
++// to wait until a DOMWindow is ready (see runExperiment below)
++let window;
++
++const countUrl = "https://statsd-bridge.services.mozilla.com/count/beta42.1174937.serpfraction.";
++const gaugeUrl = "https://statsd-bridge.services.mozilla.com/gauge/beta42.1174937.serpfraction.";
++
++const searchProviders = {
++  google: {
++    reversed: "moc.elgoog.",
++    fuzzy: "%google.com/search?q%"
++  },
++  yahoo: {
++    reversed: "moc.oohay.",
++    fuzzy: "%search.yahoo.com/yhs/search?p%"
++  },
++  bing: {
++    reversed: "moc.gnib.",
++    fuzzy: "%bing.com/search?q%"
++  }
++};
++
++const counts = {
++  google: null,
++  yahoo: null,
++  bing: null,
++  total: null
++};
++
++function saveCount(providerName, results) {
++  // query returns undefined if there are no visits to the specified page; replace with 0
++  let count = results && results[0] && results[0].getResultByName("count") || 0;
++  counts[providerName] = count;
++}
++
++// returns an integer percentage or null if either operand was invalid.
++// division operator handles type coercion for us
++function percentage(a, b) {
++  const result = a / b;
++  const p = isFinite(result) ? Math.round(result * 100) : null;
++  return p;
++}
++
++function sendBeacon(url, data) {
++  if (isExiting) {
++    return;
++  }
++  try {
++    window.navigator.sendBeacon(url, data);
++  } catch (ex) {
++    // something's wrong, give up
++    uninstallExperiment();
++  }
++}
++
++// For each search provider, either send the result percentage for that
++// provider, or increment an error counter. Also send down the total history
++// size for that user, and increment the total count of responding clients.
++function send(data) {
++  ["google", "yahoo", "bing"].forEach(function(provider) {
++    let pct = percentage(counts[provider], counts.total);
++    if (pct !== null) {
++      sendBeacon(gaugeUrl + provider, pct);
++    } else {
++      sendBeacon(countUrl + provider + ".error", 1);
++    }
++  });
++  sendBeacon(gaugeUrl + "total", counts.total);
++  sendBeacon(countUrl + "clients", 1);
++}
++
++// If an error occurs when querying or connecting to the DB, just give up:
++// fire a beacon with the name of the failed step (in dot-delimited statsd
++// format) and uninstallExperiment the experiment.
++function onError(step) {
++  sendBeacon(countUrl + "error." + step, 1)
++  uninstallExperiment();
++}
++
++function onDomWindowReady(domWindow) {
++  try {
++    if (domWindow && domWindow.removeEventListener) {
++      domWindow.removeEventListener("load", onDomWindowReady);
++    }
++    // if this is not a browser window, bail
++    let windowType = domWindow && domWindow.document &&
++                     domWindow.document.documentElement.getAttribute("windowtype");
++    if (windowType !== "navigator:browser") {
++      return;
++    }
++    // assign the addon-global window variable, so that
++    // "window.navigator.sendBeacon" will be defined
++    window = domWindow;
++    _runExperiment()
++      .catch(() => {
++      onError("experiment");
++    })
++      .then(() => {
++      uninstallExperiment();
++    });
++  } catch(ex) {}
++}
++
++
++
++// annoying, but unavoidable, window management code
++// implements nsIWindowMediatorListener
++// pulled from MDN: https://developer.mozilla.org/en-US/docs/Mozilla/Tech/XPCOM/Reference/Interface/nsIWindowMediator#addListener()
++let windowListener = {
++  onOpenWindow: function(aWindow) {
++    try {
++     Services.wm.removeListener(windowListener);
++     let domWindow = aWindow.QueryInterface(Ci.nsIInterfaceRequestor).
++                             getInterface(Ci.nsIDOMWindow);
++      if (domWindow && domWindow.document && domWindow.document.readyState === 'complete') {
++        onDomWindowReady(domWindow);
++      } else {
++        domWindow.addEventListener("load", onDomWindowReady);
++      }
++    } catch (ex) {
++    }
++  },
++  onCloseWindow: function(aWindow) {},
++  onWindowTitleChange: function(aWindow, aTitle) {}
++};
++
++function runExperiment() {
++  try {
++    if (isExiting) {
++      return;
++    }
++    // get a window, or wait till a window is opened, then continue.
++    let win = RecentWindow.getMostRecentBrowserWindow();
++    if (win) {
++      windowListener.onOpenWindow(win);
++    } else {
++      Services.wm.addListener(windowListener);
++    }
++  } catch(ex) {}
++}
++
++let getTotalCount = Task.async(function* (db) {
++  if (isExiting) {
++    return;
++  }
++  return yield db.execute(`
++    SELECT COUNT(*) AS count FROM moz_historyvisits;
++  `);
++});
++
++let _runExperiment = Task.async(function* () {
++  let db = yield PlacesUtils.promiseDBConnection();
++  for (let providerName in searchProviders) {
++    if (isExiting) {
++      break;
++    }
++    try {
++      let result = yield db.execute(query, searchProviders[providerName]);
++      saveCount(providerName, result);
++    } catch (ex) {
++    }
++  }
++  let totalResult = yield getTotalCount(db);
++  saveCount("total", totalResult);
++  send(counts);
++  uninstallExperiment();
++});
++
++function exit() {
++  // abort any future Places queries or beacons
++  isExiting = true;
++}
++
++/*
++ *  bootstrapped addon code
++ */
++
++// the startup method is apparently called twice, so you have to guard against
++// that manually via gStarted. See
++//   https://bugzilla.mozilla.org/show_bug.cgi?id=1174937#c44
++// and see also, for example,
++//   http://hg.mozilla.org/webtools/telemetry-experiment-server/file/ (cont'd)
++//   59365ce5cabe/experiments/flash-protectedmode-beta/code/bootstrap.js#l12
++var gStarted = false;
++
++function startup() {
++  if (gStarted) {
++    return;
++  }
++  gStarted = true;
++
++  // Make sure the user has telemetry and Firefox Health Report enabled.
++  // If not, immediately uninstall the experiment.
++  const prefBranch = Cc['@mozilla.org/preferences-service;1']
++                   .getService(Ci.nsIPrefService)
++                   .getBranch('');
++  const isTelexEnabled = prefBranch.getPrefType('toolkit.telemetry.enabled') ?
++                    prefBranch.getBoolPref('toolkit.telemetry.enabled') : false;
++  const isFHREnabled = prefBranch.getPrefType('datareporting.healthreport.service.enabled') ?
++                    prefBranch.getBoolPref('datareporting.healthreport.service.enabled') : false;
++  const isFHRUploadEnabled = prefBranch.getPrefType('datareporting.healthreport.uploadEnabled') ?
++                    prefBranch.getBoolPref('datareporting.healthreport.uploadEnabled') : false;
++
++  if (!isTelexEnabled || !isFHREnabled || !isFHRUploadEnabled) {
++    uninstallExperiment();
++    return;
++  }
++
++  try {
++    runExperiment();
++  } catch(ex) {
++    onError("startup");
++  }
++}
++
++function shutdown() {
++  exit();
++}
++
++function uninstallExperiment() {
++  exit();
++  Experiments.instance().disableExperiment("FROM_API");
++}
++
++function install() {
++}
++
++function uninstall() {
++}
+\ No newline at end of file
+diff --git a/experiments/serp-fraction-counts/code/install.rdf b/experiments/serp-fraction-counts/code/install.rdf
+new file mode 100644
+--- /dev/null
++++ b/experiments/serp-fraction-counts/code/install.rdf
+@@ -0,0 +1,24 @@
++<?xml version="1.0" encoding="utf-8"?>
++<RDF xmlns="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:em="http://www.mozilla.org/2004/em-rdf#">
++  <Description about="urn:mozilla:install-manifest">
++    <em:id>serp-fraction-counts-beta42@experiments.mozilla.org</em:id>
++    <em:version>1.0.0</em:version>
++    <em:type>128</em:type>
++    <em:bootstrap>true</em:bootstrap>
++    <em:unpack>false</em:unpack>
++
++    <!-- Firefox -->
++    <em:targetApplication>
++      <Description>
++        <em:id>{ec8030f7-c20a-464f-9b0e-13a3a9e97384}</em:id>
++        <em:minVersion>42.0</em:minVersion>
++        <em:maxVersion>45.*</em:maxVersion>
++      </Description>
++    </em:targetApplication>
++
++    <!-- Front End MetaData -->
++    <em:name>Search result pages in history</em:name>
++    <em:description>An experiment that measures what percentage of history visits are search result pages. The search percentage data is anonymous.</em:description>
++    <em:aboutURL>https://bugzilla.mozilla.org/show_bug.cgi?id=1174937</em:aboutURL>
++  </Description>
++</RDF>
+diff --git a/experiments/serp-fraction-counts/manifest.json b/experiments/serp-fraction-counts/manifest.json
+new file mode 100644
+--- /dev/null
++++ b/experiments/serp-fraction-counts/manifest.json
+@@ -0,0 +1,17 @@
++{
++  "publish": true,
++  "priority": 5,
++  "name": "Search result pages in history",
++  "description": "An experiment that measures what percentage of history visits are search result pages. The search percentage data is anonymous.",
++  "info": "https://bugzilla.mozilla.org/show_bug.cgi?id=1174937",
++  "manifest": {
++    "id": "serp-fraction-counts-beta42@experiments.mozilla.org",
++    "startTime": 1447113600,
++    "endTime": 1448323200,
++    "maxActiveSeconds": 86400,
++    "appName": ["Firefox"],
++    "channel": ["beta"],
++    "sample": 0.1
++  }
++}
++
