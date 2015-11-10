@@ -58,33 +58,33 @@ const counts = {
 };
 
 function saveCount(providerName, results) {
-  console.log('Telex: saveCount');
+  console.log("Telex: saveCount");
   // query returns undefined if there are no visits to the specified page; replace with 0
   let count = results && results[0] && results[0].getResultByName("count") || 0;
-  console.log('Telex.saveCount: the count for ' + providerName + ' is ' + count);
+  console.log("Telex.saveCount: the count for " + providerName + " is " + count);
   counts[providerName] = count;
 }
 
 // returns an integer percentage or null if either operand was invalid.
 // division operator handles type coercion for us
 function percentage(a, b) {
-  console.log('Telex: percentage');
+  console.log("Telex: percentage");
   const result = a / b;
   const p = isFinite(result) ? Math.round(result * 100) : null;
-  console.log('Telex.percentage of ' + a + ' / ' + b + ' is ' + p);
+  console.log("Telex.percentage of " + a + " / " + b + " is " + p);
   return p;
 }
 
 function sendBeacon(url, data) {
-  console.log('Telex: sendBeacon: url, ', url, 'data: ', data);
+  console.log("Telex: sendBeacon: url, ", url, "data: ", data);
   if (isExiting) {
     return;
   }
   try {
     window.navigator.sendBeacon(url, data);
   } catch (ex) {
-    // something's wrong, give up
-    console.error('Telex: sendBeacon error: ', ex);
+    // something"s wrong, give up
+    console.error("Telex: sendBeacon error: ", ex);
     uninstallExperiment();
   }
 }
@@ -93,7 +93,7 @@ function sendBeacon(url, data) {
 // provider, or increment an error counter. Also send down the total history
 // size for that user, and increment the total count of responding clients.
 function send(data) {
-  console.log('Telex: send: ', data);
+  console.log("Telex: send: ", data);
   ["google", "yahoo", "bing"].forEach(function(provider) {
     let pct = percentage(counts[provider], counts.total);
     if (pct !== null) {
@@ -110,13 +110,13 @@ function send(data) {
 // fire a beacon with the name of the failed step (in dot-delimited statsd
 // format) and uninstallExperiment the experiment.
 function onError(step) {
-  console.log('Telex: onError: ', step);
+  console.log("Telex: onError: ", step);
   sendBeacon(countUrl + "error." + step, 1)
   uninstallExperiment();
 }
 
 function onDomWindowReady(domWindow) {
-  console.log('Telex: onDomWindowReady');
+  console.log("Telex: onDomWindowReady");
   try {
     if (domWindow && domWindow.removeEventListener) {
       domWindow.removeEventListener("load", onDomWindowReady);
@@ -138,7 +138,7 @@ function onDomWindowReady(domWindow) {
       uninstallExperiment();
     });
   } catch(ex) {
-    console.error('Telex.onDomWindowReady failed: ', ex);
+    console.error("Telex.onDomWindowReady failed: ", ex);
   }
 }
 
@@ -149,20 +149,20 @@ function onDomWindowReady(domWindow) {
 // pulled from MDN: https://developer.mozilla.org/en-US/docs/Mozilla/Tech/XPCOM/Reference/Interface/nsIWindowMediator#addListener()
 let windowListener = {
   onOpenWindow: function(aWindow) {
-    console.log('Telex: onOpenWindow');
+    console.log("Telex: onOpenWindow");
     try {
      Services.wm.removeListener(windowListener);
      let domWindow = aWindow.QueryInterface(Ci.nsIInterfaceRequestor).
                              getInterface(Ci.nsIDOMWindow);
-      console.log('Telex.onOpenWindow: does domWindow exist?', domWindow);
-      if (domWindow && domWindow.document && domWindow.document.readyState === 'complete') {
-        console.log('window document is loaded, so lets just get to work');
+      console.log("Telex.onOpenWindow: does domWindow exist?", domWindow);
+      if (domWindow && domWindow.document && domWindow.document.readyState === "complete") {
+        console.log("window document is loaded, so lets just get to work");
         onDomWindowReady(domWindow);
       } else {
         domWindow.addEventListener("load", onDomWindowReady);
       }
     } catch (ex) {
-      console.error('Telex.onOpenWindow failed: ', ex);
+      console.error("Telex.onOpenWindow failed: ", ex);
     }
   },
   onCloseWindow: function(aWindow) {},
@@ -170,27 +170,27 @@ let windowListener = {
 };
 
 function runExperiment() {
-  console.log('Telex: runExperiment');
+  console.log("Telex: runExperiment");
   try {
     if (isExiting) {
-      console.log('Telex: runExperiment exiting because isExiting is true');
+      console.log("Telex: runExperiment exiting because isExiting is true");
       return;
     }
     // get a window, or wait till a window is opened, then continue.
     let win = RecentWindow.getMostRecentBrowserWindow();
-    console.log('Telex: did runExperiment find a window? ', !!win);
+    console.log("Telex: did runExperiment find a window? ", !!win);
     if (win) {
       windowListener.onOpenWindow(win);
     } else {
       Services.wm.addListener(windowListener);
     }
   } catch(ex) {
-    console.error('Telex.runExperiment failed: ', ex);
+    console.error("Telex.runExperiment failed: ", ex);
   }
 }
 
 let getTotalCount = Task.async(function* (db) {
-  console.log('Telex: getTotalCount');
+  console.log("Telex: getTotalCount");
   if (isExiting) {
     return;
   }
@@ -200,33 +200,33 @@ let getTotalCount = Task.async(function* (db) {
 });
 
 let _runExperiment = Task.async(function* () {
-  console.log('Telex: _runExperiment');
+  console.log("Telex: _runExperiment");
   let db = yield PlacesUtils.promiseDBConnection();
-  console.log('Telex._runExperiment: is db defined?', db);
+  console.log("Telex._runExperiment: is db defined?", db);
   for (let providerName in searchProviders) {
-    console.log('Telex._runExperiment: now running query for search provider ' + providerName);
+    console.log("Telex._runExperiment: now running query for search provider " + providerName);
     if (isExiting) {
-      console.log('Telex._runExperiment: isExiting true, not running query for ' + providerName);
+      console.log("Telex._runExperiment: isExiting true, not running query for " + providerName);
       break;
     }
     try {
       let result = yield db.execute(query, searchProviders[providerName]);
-      console.log('Telex._runExperiment: results of query are ', result);
+      console.log("Telex._runExperiment: results of query are ", result);
       saveCount(providerName, result);
     } catch (ex) {
-      console.error('db.execute or saveCount failed: ', ex);
+      console.error("db.execute or saveCount failed: ", ex);
     }
   }
-  console.log('Telex._runExperiment: done iterating search providers, now getting total');
+  console.log("Telex._runExperiment: done iterating search providers, now getting total");
   let totalResult = yield getTotalCount(db);
-  console.log('Telex._runExperiment: totalResult is ', totalResult);
+  console.log("Telex._runExperiment: totalResult is ", totalResult);
   saveCount("total", totalResult);
   send(counts);
   uninstallExperiment();
 });
 
 function exit() {
-  console.log('Telex: exit');
+  console.log("Telex: exit");
   // abort any future Places queries or beacons
   isExiting = true;
 }
@@ -244,7 +244,7 @@ function exit() {
 var gStarted = false;
 
 function startup() {
-  console.log('Telex: startup');
+  console.log("Telex: startup");
   if (gStarted) {
     return;
   }
@@ -252,15 +252,15 @@ function startup() {
 
   // Make sure the user has telemetry and Firefox Health Report enabled.
   // If not, immediately uninstall the experiment.
-  const prefBranch = Cc['@mozilla.org/preferences-service;1']
+  const prefBranch = Cc["@mozilla.org/preferences-service;1"]
                    .getService(Ci.nsIPrefService)
-                   .getBranch('');
-  const isTelexEnabled = prefBranch.getPrefType('toolkit.telemetry.enabled') ?
-                    prefBranch.getBoolPref('toolkit.telemetry.enabled') : false;
-  const isFHREnabled = prefBranch.getPrefType('datareporting.healthreport.service.enabled') ?
-                    prefBranch.getBoolPref('datareporting.healthreport.service.enabled') : false;
-  const isFHRUploadEnabled = prefBranch.getPrefType('datareporting.healthreport.uploadEnabled') ?
-                    prefBranch.getBoolPref('datareporting.healthreport.uploadEnabled') : false;
+                   .getBranch("");
+  const isTelexEnabled = prefBranch.getPrefType("toolkit.telemetry.enabled") ?
+                    prefBranch.getBoolPref("toolkit.telemetry.enabled") : false;
+  const isFHREnabled = prefBranch.getPrefType("datareporting.healthreport.service.enabled") ?
+                    prefBranch.getBoolPref("datareporting.healthreport.service.enabled") : false;
+  const isFHRUploadEnabled = prefBranch.getPrefType("datareporting.healthreport.uploadEnabled") ?
+                    prefBranch.getBoolPref("datareporting.healthreport.uploadEnabled") : false;
 
   if (!isTelexEnabled || !isFHREnabled || !isFHRUploadEnabled) {
     uninstallExperiment();
@@ -270,26 +270,26 @@ function startup() {
   try {
     runExperiment();
   } catch(ex) {
-    console.error('Telex: runExperiment failed with error: ', ex);
+    console.error("Telex: runExperiment failed with error: ", ex);
     onError("startup");
   }
 }
 
 function shutdown() {
-  console.log('Telex: shutdown');
+  console.log("Telex: shutdown");
   exit();
 }
 
 function uninstallExperiment() {
-  console.log('Telex: uninstallExperiment');
+  console.log("Telex: uninstallExperiment");
   exit();
   Experiments.instance().disableExperiment("FROM_API");
 }
 
 function install() {
-  console.log('Telex: install');
+  console.log("Telex: install");
 }
 
 function uninstall() {
-  console.log('Telex: uninstall');
+  console.log("Telex: uninstall");
 }
