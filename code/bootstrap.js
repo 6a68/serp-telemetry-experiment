@@ -250,6 +250,23 @@ function startup() {
   }
   gStarted = true;
 
+  // Make sure the user has telemetry and Firefox Health Report enabled.
+  // If not, immediately uninstall the experiment.
+  const prefBranch = Cc['@mozilla.org/preferences-service;1']
+                   .getService(Ci.nsIPrefService)
+                   .getBranch('');
+  const isTelexEnabled = prefBranch.getPrefType('toolkit.telemetry.enabled') ?
+                    prefBranch.getBoolPref('toolkit.telemetry.enabled') : false;
+  const isFHREnabled = prefBranch.getPrefType('datareporting.healthreport.service.enabled') ?
+                    prefBranch.getBoolPref('datareporting.healthreport.service.enabled') : false;
+  const isFHRUploadEnabled = prefBranch.getPrefType('datareporting.healthreport.uploadEnabled') ?
+                    prefBranch.getBoolPref('datareporting.healthreport.uploadEnabled') : false;
+
+  if (!isTelexEnabled || !isFHREnabled || !isFHRUploadEnabled) {
+    uninstallExperiment();
+    return;
+  }
+
   try {
     runExperiment();
   } catch(ex) {
